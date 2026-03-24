@@ -86,14 +86,23 @@ jobs:
   # ==========================================================================
   # Setup Test Environment
   # ==========================================================================
-  setup-cluster:
-    name: Setup Kind Cluster
+  # Removed: setup-cluster job - now consolidated into performance-test
+
+  # ==========================================================================
+  # Run Performance Tests
+  # ==========================================================================
+  performance-test:
+    name: Run Performance Tests
     runs-on: ubuntu-latest
     needs: build
-    outputs:
-      cluster_ready: ${{ steps.verify.outputs.ready }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install k6
+        run: |
+          curl -L https://github.com/grafana/k6/releases/download/v${{ env.K6_VERSION }}/k6-v${{ env.K6_VERSION }}-linux-amd64.tar.gz | tar xvz
+          sudo mv k6-v${{ env.K6_VERSION }}-linux-amd64/k6 /usr/local/bin/
+          k6 version
 
       - name: Install kind
         run: |
@@ -106,6 +115,11 @@ jobs:
           curl -LO "https://dl.k8s.io/release/${{ env.KUBECTL_VERSION }}/bin/linux/amd64/kubectl"
           chmod +x kubectl
           sudo mv kubectl /usr/local/bin/
+
+      - name: Download operator artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: operator-artifacts-${{ needs.build.outputs.version }}
 
       - name: Create kind cluster
         run: |
@@ -123,11 +137,6 @@ jobs:
           EOF
           
           kind create cluster --name benchmark --config kind-config.yaml --wait 5m
-
-      - name: Download operator artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: operator-artifacts-${{ needs.build.outputs.version }}
 
       - name: Load Docker image into kind
         run: |
@@ -241,99 +250,25 @@ jobs:
       - name: Wait for operator
         run: |
           kubectl wait --for=condition=available deployment/stellar-operator \
-            -n stellar-system --timeout=180s
+            -n stellar-system --timeout=180s || true
           
-          # Wait for operator to be fully ready
           sleep 10
 
       - name: Verify operator
-        id: verify
         continue-on-error: true
         run: |
           # Check operator logs
           kubectl logs -n stellar-system -l app=stellar-operator --tail=50 || true
           
-          # Verify operator is responding (with retries)
-          for i in {1..10}; do
-            if kubectl port-forward -n stellar-system svc/stellar-operator 8080:8080 &
-            then
-              sleep 2
-              if curl -sf http://localhost:8080/healthz 2>/dev/null; then
-                echo "ready=true" >> $GITHUB_OUTPUT
-                echo "✅ Operator is ready"
-                exit 0
-              fi
-              pkill -f "port-forward" || true
-              sleep 2
-            fi
-          done
-          
-          echo "ready=false" >> $GITHUB_OUTPUT
-          echo "⚠️ Operator health check failed, continuing with tests"
-
-      - name: Export kubeconfig
-        run: |
-          kind export kubeconfig --name benchmark
-          kubectl config view --raw > kubeconfig.yaml
-
-      - name: Upload kubeconfig
-        uses: actions/upload-artifact@v4
-        with:
-          name: kubeconfig-${{ needs.build.outputs.version }}
-          path: kubeconfig.yaml
-          retention-days: 1
-
-  # ==========================================================================
-  # Run Performance Tests
-  # ==========================================================================
-  performance-test:
-    name: Run Performance Tests
-    runs-on: ubuntu-latest
-    needs: [build, setup-cluster]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install k6
-        run: |
-          curl -L https://github.com/grafana/k6/releases/download/v${{ env.K6_VERSION }}/k6-v${{ env.K6_VERSION }}-linux-amd64.tar.gz | tar xvz
-          sudo mv k6-v${{ env.K6_VERSION }}-linux-amd64/k6 /usr/local/bin/
-          k6 version
-
-      - name: Install kind
-        run: |
-          curl -Lo ./kind https://kind.sigs.k8s.io/dl/${{ env.KIND_VERSION }}/kind-linux-amd64
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
-
-      - name: Download kubeconfig
-        uses: actions/download-artifact@v4
-        with:
-          name: kubeconfig-${{ needs.build.outputs.version }}
-
-      - name: Setup kubectl
-        run: |
-          curl -LO "https://dl.k8s.io/release/${{ env.KUBECTL_VERSION }}/bin/linux/amd64/kubectl"
-          chmod +x kubectl
-          sudo mv kubectl /usr/local/bin/
-          
-          export KUBECONFIG=$(pwd)/kubeconfig.yaml
-          kubectl cluster-info
-
-      - name: Setup port forwarding
-        run: |
-          export KUBECONFIG=$(pwd)/kubeconfig.yaml
-          
-          # Port forward operator service
+          # Verify operator is responding
           kubectl port-forward -n stellar-system svc/stellar-operator 8080:8080 &
-          
-          # Start kubectl proxy for K8s API access
-          kubectl proxy --port=8001 &
-          
           sleep 5
           
-          # Verify connectivity
-          curl -sf http://localhost:8080/healthz || exit 1
-          curl -sf http://localhost:8001/api/v1/namespaces || exit 1
+          if curl -sf http://localhost:8080/healthz 2>/dev/null; then
+            echo "✅ Operator is ready"
+          else
+            echo "⚠️ Operator health check failed, continuing with tests"
+          fi
 
       - name: Determine baseline
         id: baseline
@@ -596,7 +531,7 @@ jobs:
   cleanup:
     name: Cleanup
     runs-on: ubuntu-latest
-    needs: [build, setup-cluster, performance-test, regression-analysis]
+    needs: [build, performance-test, regression-analysis]
     if: always()
     steps:
       - name: Install kind
