@@ -125,3 +125,19 @@ defaultResources:
     limits:
       cpu: "4"
       memory: "8Gi"
+
+security:
+  audit:
+    enabled: true
+    logLevel: "Audit"
+  podSecurityStandard: "restricted"
+  falco:
+    enabled: true
+  networkPolicy:
+    enabled: true
+    ingress:
+      namespaceSelector: true
+  admissionWebhook:
+    failurePolicy: Fail
+  imagePolicy:
+    allowLatestTag: false

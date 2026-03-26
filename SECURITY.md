@@ -107,13 +107,34 @@ We use:
 - Trivy for container scanning
 - SBOM generation for supply chain security
 
-## Security Scanning
+## Security Scanning & Testing
 
-Our CI/CD pipeline includes:
-- **Trivy** - Container image vulnerability scanning
-- **Cargo Audit** - Rust dependency security checks
-- **SBOM Generation** - Software Bill of Materials
-- **CodeQL** - Static code analysis (planned)
+Our CI/CD pipeline includes comprehensive automated security testing:
+
+### Vulnerability Scanning
+- **Trivy** - Container/FS/dependency scanning (CRITICAL/HIGH alerts)
+- **Cargo Audit** - Rust crates.io advisories
+- **SBOM Generation** - CycloneDX supply chain transparency
+- **CodeQL** - Semantic code analysis (GitHub Advanced Security)
+
+### Penetration Testing
+- **k6** - API load/penetration scenarios (DDoS, slowloris sim)
+- **OWASP ZAP** - Baseline DAST for operator REST API
+- **Nuclei** - Template-based vulnerability scanning
+
+### Compliance Testing
+- **kube-bench** - CIS Kubernetes Benchmark automation
+- **Checkov** - IaC scanning for Helm charts/manifests
+- **kube-score** - K8s resource scoring
+
+Run locally: `make security-all`
+
+## Runtime Security Monitoring
+
+- **Prometheus + Grafana** - Security metrics dashboard
+- **Falco** - Behavioral runtime security (planned integration)
+- **Audit Logs** - API/server audit trails
+- **CVE Auto-remediation** - Controller-based patching (src/controller/cve.rs)
 
 ## Compliance
 
