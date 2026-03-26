@@ -1,15 +1,15 @@
 use std::process::{self, Command};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use chrono::Utc;
 use clap::{Parser, Subcommand};
 use k8s_openapi::api::coordination::v1::Lease;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::MicroTime;
 use kube::api::{Api, ObjectMeta, Patch, PatchParams, PostParams};
-use stellar_k8s::{controller, crd::StellarNode, preflight, Error};
-use tracing::{debug, info, warn, Level};
-use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+use stellar_k8s::{Error, controller, crd::StellarNode, preflight};
+use tracing::{Level, debug, info, warn};
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -53,19 +53,19 @@ struct OperatorLogsArgs {
     /// Defaults to current context namespace
     #[arg(short, long, default_value = "default")]
     namespace: String,
-    
+
     /// Container name within operator pod (default: 'operator')
     #[arg(short, long, default_value = "operator")]
     container: String,
-    
+
     /// Follow log output as it comes in
     #[arg(short = 'f', long)]
     follow: bool,
-    
+
     /// Number of lines to show from the end of logs
     #[arg(short, long, default_value_t = 100i64)]
     tail: i64,
-    
+
     /// Pod name (if specific pod, default: all operator pods)
     #[arg(short, long)]
     pod: Option<String>,
@@ -321,31 +321,37 @@ async fn main() -> Result<(), Error> {
 
 /// Get logs from the stellar-operator Deployment pods
 fn operator_logs(args: OperatorLogsArgs) -> Result<(), Error> {
-    println!("📋 stellar-operator logs (namespace: {}, container: {})", args.namespace, args.container);
-    
+    println!(
+        "📋 stellar-operator logs (namespace: {}, container: {})",
+        args.namespace, args.container
+    );
+
     let mut cmd = Command::new("kubectl");
     cmd.arg("logs");
     cmd.arg("-n").arg(&args.namespace);
     cmd.arg("deployment/stellar-operator");
     cmd.arg("-c").arg(&args.container);
     cmd.arg("--tail").arg(args.tail.to_string());
-    
+
     if args.follow {
         cmd.arg("-f");
     }
-    
+
     if let Some(pod_name) = &args.pod {
         cmd.arg(pod_name);
     }
-    
-    let status = cmd.status()
+
+    let status = cmd
+        .status()
         .map_err(|e| Error::ConfigError(format!("kubectl logs failed to spawn: {e}")))?;
-    
+
     if !status.success() {
         let code = status.code().unwrap_or(-1);
-        return Err(Error::ConfigError(format!("kubectl logs exited with code {code}")));
+        return Err(Error::ConfigError(format!(
+            "kubectl logs exited with code {code}"
+        )));
     }
-    
+
     Ok(())
 }
 
