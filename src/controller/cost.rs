@@ -284,6 +284,7 @@ mod tests {
                 forensic_snapshot: None,
                 read_pool_endpoint: None,
                 resource_meta: None,
+                pod_anti_affinity: Default::default(),
             },
             status: None,
         };
@@ -391,6 +392,7 @@ mod tests {
             forensic_snapshot: None,
             read_pool_endpoint: None,
             resource_meta: None,
+            pod_anti_affinity: Default::default(),
         }
     }
 }
