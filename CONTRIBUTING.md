@@ -24,17 +24,50 @@ Thank you for your interest in contributing to Stellar-K8s! This project aims to
    make dev-setup
    ```
 
+   This will:
+   - Install Rust toolchain and components
+   - Install cargo-audit and cargo-watch
+   - Install pre-commit hooks for automatic code quality checks
+
 3. Run local checks before committing:
 
    ```bash
    # Quick check
    make quick
 
+   # Run pre-commit hooks manually
+   make pre-commit
+
    # Or comprehensive pre-push check
    make ci-local
    ```
 
    **See [CI Commands Reference](.github/CI_COMMANDS.md) for the exact commands that run in CI, which you can run manually.**
+
+## Pre-commit Hooks
+
+This project uses pre-commit hooks to catch formatting and lint issues before they reach CI. The hooks are automatically installed when you run `make dev-setup`.
+
+### Configured Hooks
+
+- **cargo fmt**: Ensures consistent code formatting
+- **cargo clippy**: Catches common mistakes and improves code quality
+- **cargo test**: Runs the test suite (pre-push only)
+- **trailing-whitespace**: Removes trailing whitespace
+- **yamllint**: Validates YAML files
+
+### Manual Usage
+
+```bash
+# Run all hooks on all files
+make pre-commit
+
+# Install hooks if not already installed
+make pre-commit-install
+
+# Skip hooks for a specific commit (not recommended)
+git commit --no-verify -m "message"
+```
 
 ## Coding Standards
 
@@ -80,14 +113,16 @@ Our CI pipeline (GitHub Actions) runs:
 ## Local Development Commands
 
 ```bash
-make help          # Show all available targets
-make fmt           # Auto-format code
-make lint          # Run clippy
-make audit         # Security audit
-make test          # Run tests
-make build         # Build release binary
-make docker-build  # Build Docker image
-make ci-local      # Full CI validation
+make help             # Show all available targets
+make fmt              # Auto-format code
+make lint             # Run clippy
+make audit            # Security audit
+make test             # Run tests
+make build            # Build release binary
+make docker-build     # Build Docker image
+make ci-local         # Full CI validation
+make pre-commit       # Run pre-commit hooks manually
+make pre-commit-install # Install pre-commit hooks
 ```
 
 ## Troubleshooting

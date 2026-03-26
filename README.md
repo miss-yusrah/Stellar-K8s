@@ -173,7 +173,17 @@ Stellar-K8s comes with built-in Prometheus metrics and a pre-configured Grafana 
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on our development process, coding standards, and how to submit pull requests.
+We welcome contributions! This project uses pre-commit hooks to ensure code quality. Please see our [Contributing Guide](CONTRIBUTING.md) for details on our development process, coding standards, and how to submit pull requests.
+
+### Quick Start for Contributors
+
+```bash
+# Setup development environment (includes pre-commit hooks)
+make dev-setup
+
+# Run pre-commit hooks manually
+make pre-commit
+```
 
 ---
 

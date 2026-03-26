@@ -101,6 +101,17 @@ jobs:
         with:
           shared-key: "ci-lint"
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Run pre-commit hooks
+        run: pre-commit run --all-files --show-diff-on-failure
+
       - name: Check formatting
         run: cargo fmt --all --check
 
