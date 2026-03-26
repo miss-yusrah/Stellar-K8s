@@ -89,6 +89,9 @@ pub async fn run_server(
 ) -> Result<()> {
     let mut app = Router::new()
         .route("/health", get(handlers::health))
+        .route("/healthz", get(handlers::healthz))
+        .route("/readyz", get(handlers::readyz))
+        .route("/livez", get(handlers::livez))
         .route("/leader", get(handlers::leader_status))
         .route("/api/v1/nodes", get(handlers::list_nodes))
         .route("/api/v1/nodes/:namespace/:name", get(handlers::get_node))

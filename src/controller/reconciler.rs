@@ -87,6 +87,9 @@ pub struct ControllerState {
     pub is_leader: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// Monotonically increasing id for each reconciliation attempt.
     pub reconcile_id_counter: AtomicU64,
+    /// Unix timestamp (seconds) of the last successful reconcile cycle.
+    /// Zero means no successful reconcile has occurred yet.
+    pub last_reconcile_success: std::sync::Arc<AtomicU64>,
 }
 
 impl ControllerState {
@@ -131,6 +134,8 @@ impl ControllerState {
 ///         operator_namespace: "stellar-operator".to_string(),
 ///         dry_run: false,
 ///         is_leader: Arc::new(AtomicBool::new(true)),
+///         reconcile_id_counter: std::sync::atomic::AtomicU64::new(0),
+///         last_reconcile_success: Arc::new(std::sync::atomic::AtomicU64::new(0)),
 ///     });
 ///     run_controller(state).await?;
 ///     Ok(())
@@ -1275,6 +1280,13 @@ pub(crate) async fn apply_stellar_node(
     }
 
     // 13. Update status to Running with ready replica count
+    ctx.last_reconcile_success.store(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+        Ordering::Relaxed,
+    );
     Ok(Action::requeue(Duration::from_secs(if phase == "Ready" {
         60
     } else {

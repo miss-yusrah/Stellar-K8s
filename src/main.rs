@@ -580,6 +580,7 @@ async fn run_operator(args: RunArgs) -> Result<(), Error> {
         dry_run: args.dry_run,
         is_leader: Arc::clone(&is_leader),
         reconcile_id_counter: AtomicU64::new(0),
+        last_reconcile_success: Arc::new(AtomicU64::new(0)),
     });
 
     // Start the peer discovery manager

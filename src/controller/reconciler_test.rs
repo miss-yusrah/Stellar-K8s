@@ -308,6 +308,7 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
             dry_run: true,
             is_leader: Arc::new(AtomicBool::new(true)),
             reconcile_id_counter: AtomicU64::new(0),
+            last_reconcile_success: Arc::new(AtomicU64::new(0)),
         });
 
         // Test with a retriable error (network-related)
@@ -337,6 +338,7 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
             dry_run: true,
             is_leader: Arc::new(AtomicBool::new(true)),
             reconcile_id_counter: AtomicU64::new(0),
+            last_reconcile_success: Arc::new(AtomicU64::new(0)),
         });
 
         // Test with validation error (non-retriable)
@@ -365,6 +367,7 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
             dry_run: true,
             is_leader: Arc::new(AtomicBool::new(true)),
             reconcile_id_counter: AtomicU64::new(0),
+            last_reconcile_success: Arc::new(AtomicU64::new(0)),
         });
 
         let errors = vec![
@@ -585,6 +588,7 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
             dry_run: false,
             is_leader: Arc::new(AtomicBool::new(true)),
             reconcile_id_counter: AtomicU64::new(0),
+            last_reconcile_success: Arc::new(AtomicU64::new(0)),
         };
 
         assert_eq!(state.operator_namespace, "test-namespace");
@@ -609,6 +613,7 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
             dry_run: true,
             is_leader: Arc::new(AtomicBool::new(true)),
             reconcile_id_counter: AtomicU64::new(0),
+            last_reconcile_success: Arc::new(AtomicU64::new(0)),
         };
 
         assert!(
