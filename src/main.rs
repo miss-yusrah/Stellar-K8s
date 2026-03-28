@@ -764,6 +764,8 @@ async fn run_operator(args: RunArgs) -> Result<(), Error> {
         .with_default_directive(Level::INFO.into())
         .from_env_lossy();
 
+    let (env_filter, reload_handle) = tracing_subscriber::reload::Layer::new(env_filter);
+
     let fmt_layer = fmt::layer().json().with_target(true);
 
     // Register the subscriber with both stdout logging and OpenTelemetry tracing
@@ -924,6 +926,8 @@ async fn run_operator(args: RunArgs) -> Result<(), Error> {
         operator_config: Arc::new(operator_config),
         reconcile_id_counter: std::sync::atomic::AtomicU64::new(0),
         last_reconcile_success: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+        log_reload_handle: reload_handle,
+        log_level_expires_at: Arc::new(tokio::sync::Mutex::new(None)),
     });
 
     // Start the peer discovery manager

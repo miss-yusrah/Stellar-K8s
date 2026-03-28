@@ -7,7 +7,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use axum::{routing::get, Router};
+use axum::{routing::get, Router, middleware};
 use axum_server::tls_rustls::RustlsConfig;
 use rustls::server::WebPkiClientVerifier;
 use rustls::RootCertStore;
@@ -20,6 +20,7 @@ use tracing::info;
 use crate::controller::ControllerState;
 use crate::{Error, Result};
 
+use super::auth;
 use super::custom_metrics;
 use super::dashboard_handlers;
 use super::handlers;
@@ -95,6 +96,13 @@ pub async fn run_server(
         .route("/leader", get(handlers::leader_status))
         .route("/api/v1/nodes", get(handlers::list_nodes))
         .route("/api/v1/nodes/:namespace/:name", get(handlers::get_node))
+        // Log level dynamic control
+        .route(
+            "/config/log-level",
+            get(handlers::get_log_level)
+                .post(handlers::set_log_level)
+                .route_layer(middleware::from_fn_with_state(state.clone(), auth::k8s_rbac_auth)),
+        )
         // Dashboard routes
         .route("/", get(dashboard_ui))
         .route("/api/v1/dashboard/overview", get(dashboard_handlers::dashboard_overview))

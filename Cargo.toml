@@ -55,7 +55,7 @@ hostname = "0.4"
 
 # Logging and tracing
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "registry"] }
 tracing-opentelemetry = "0.22"
 
 # OpenTelemetry for distributed tracing

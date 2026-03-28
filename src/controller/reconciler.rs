@@ -40,6 +40,7 @@ use kube::{
     Resource, ResourceExt,
 };
 use tracing::{debug, error, info, info_span, instrument, warn};
+use tracing_subscriber::{reload::Handle, EnvFilter, Registry};
 
 use crate::crd::{
     DisasterRecoveryStatus, NodeType, RolloutStrategy, SpecValidationError, StellarNode,
@@ -97,6 +98,10 @@ pub struct ControllerState {
     pub reconcile_id_counter: std::sync::atomic::AtomicU64,
     /// Timestamp of the last successful reconcile
     pub last_reconcile_success: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    /// Handle to reload the tracing filter
+    pub log_reload_handle: Handle<EnvFilter, Registry>,
+    /// Optional expiration time for a temporary log level change
+    pub log_level_expires_at: std::sync::Arc<tokio::sync::Mutex<Option<chrono::DateTime<chrono::Utc>>>>,
 }
 
 impl ControllerState {
