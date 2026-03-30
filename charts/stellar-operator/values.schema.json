@@ -158,10 +158,29 @@
     "affinity": {
       "type": "object"
     },
-    "sidecar": {
+    "podDisruptionBudget": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Diagnostic sidecar container configuration",
+      "description": "PodDisruptionBudget configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "minAvailable": {
+          "oneOf": [
+            { "type": "integer", "minimum": 0 },
+            { "type": "string" }
+          ]
+        },
+        "maxUnavailable": {
+          "oneOf": [
+            { "type": "integer", "minimum": 0 },
+            { "type": "string" }
+          ]
+        }
+      }
+    },
+    "sidecar": {
       "properties": {
         "enabled": {
           "type": "boolean"
