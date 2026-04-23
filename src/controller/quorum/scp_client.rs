@@ -214,4 +214,3 @@ mod tests {
         assert_eq!(client.timeout, Duration::from_secs(10));
     }
 }
-

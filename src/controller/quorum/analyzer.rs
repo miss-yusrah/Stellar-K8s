@@ -596,4 +596,3 @@ mod tests {
         assert_eq!(score, 1.0); // Maximum fragility
     }
 }
-
