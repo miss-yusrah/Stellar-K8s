@@ -115,7 +115,7 @@ pub async fn check_archive_integrity_random(
 
         // Construct path for a history file (simplified for demonstration)
         // Format: /history/00/00/00/history-0000003f.json
-        let hex_ledger = format!("{:08x}", checkpoint_ledger);
+        let hex_ledger = format!("{checkpoint_ledger:08x}");
         let path = format!(
             "history/{}/{}/{}/history-{}.json",
             &hex_ledger[0..2],
@@ -145,8 +145,7 @@ pub async fn check_archive_integrity_random(
                         healthy: false,
                         checkpoints_verified: verified_count,
                         message: format!(
-                            "Corrupted checkpoint detected: empty file at {}",
-                            file_url
+                            "Corrupted checkpoint detected: empty file at {file_url}",
                         ),
                         error: Some("Empty checkpoint file".to_string()),
                     });
@@ -182,7 +181,7 @@ pub async fn check_archive_integrity_random(
                     url: url.to_string(),
                     healthy: false,
                     checkpoints_verified: verified_count,
-                    message: format!("Connection error: {}", e),
+                    message: format!("Connection error: {e}"),
                     error: Some(e.to_string()),
                 });
             }
@@ -194,8 +193,7 @@ pub async fn check_archive_integrity_random(
         healthy: true,
         checkpoints_verified: verified_count,
         message: format!(
-            "Successfully verified {} random checkpoints",
-            verified_count
+            "Successfully verified {verified_count} random checkpoints",
         ),
         error: None,
     })

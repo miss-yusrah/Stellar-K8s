@@ -182,7 +182,7 @@ pub async fn run_controller(state: Arc<ControllerState>) -> Result<()> {
     info!(
         "Starting StellarNode controller (mode: {})",
         if let Some(ns) = &state.watch_namespace {
-            format!("namespace-scoped: {}", ns)
+            format!("namespace-scoped: {ns}")
         } else {
             "cluster-scoped".to_string()
         }

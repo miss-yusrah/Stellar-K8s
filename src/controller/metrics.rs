@@ -626,7 +626,7 @@ impl std::fmt::Display for NodePhase {
             NodePhase::Remediating => "Remediating",
             NodePhase::Terminating => "Terminating",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

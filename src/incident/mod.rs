@@ -46,8 +46,7 @@ pub async fn run_incident_report(args: IncidentReportArgs) -> Result<()> {
     let (start_time, end_time) = calculate_window(&args, now)?;
 
     println!(
-        "Gathering incident artifacts for window: {} to {}",
-        start_time, end_time
+        "Gathering incident artifacts for window: {start_time} to {end_time}",
     );
 
     let path = Path::new(&args.output);
@@ -160,14 +159,11 @@ async fn gather_operator_logs<W: Write + std::io::Seek>(
 
         match pod_api.logs(&pod_name, &log_params).await {
             Ok(logs) => {
-                zip.start_file(format!("logs/operator-{}.log", pod_name), options)?;
+                zip.start_file(format!("logs/operator-{pod_name}.log"), options)?;
                 zip.write_all(logs.as_bytes())?;
             }
             Err(e) => {
-                eprintln!(
-                    "Warning: could not fetch logs for operator pod {}: {}",
-                    pod_name, e
-                );
+                eprintln!("Warning: could not fetch logs for operator pod {pod_name}: {e}");
             }
         }
     }
@@ -195,14 +191,11 @@ async fn gather_stellar_pod_logs<W: Write + std::io::Seek>(
 
         match pod_api.logs(&pod_name, &log_params).await {
             Ok(logs) => {
-                zip.start_file(format!("logs/node-{}.log", pod_name), options)?;
+                zip.start_file(format!("logs/node-{pod_name}.log"), options)?;
                 zip.write_all(logs.as_bytes())?;
             }
             Err(e) => {
-                eprintln!(
-                    "Warning: could not fetch logs for node pod {}: {}",
-                    pod_name, e
-                );
+                eprintln!("Warning: could not fetch logs for node pod {pod_name}: {e}");
             }
         }
     }
