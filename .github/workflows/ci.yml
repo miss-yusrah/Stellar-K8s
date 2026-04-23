@@ -25,6 +25,9 @@ jobs:
       docker: ${{ steps.detect.outputs.docker }}
       helm: ${{ steps.detect.outputs.helm }}
       api_docs: ${{ steps.detect.outputs.api_docs }}
+      rust_core: ${{ steps.detect.outputs.rust_core }}
+      deps: ${{ steps.detect.outputs.deps }}
+      examples: ${{ steps.detect.outputs.examples }}
     steps:
       - uses: actions/checkout@v4
       - name: Detect Docker-impacting changes
@@ -68,6 +71,24 @@ jobs:
             echo "api_docs=true" >> "$GITHUB_OUTPUT"
           else
             echo "api_docs=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -Eq '^(src/|Cargo\.toml|Cargo\.lock|Makefile|build\.rs)'; then
+            echo "rust_core=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "rust_core=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -Eq '^(Cargo\.toml|Cargo\.lock)'; then
+            echo "deps=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deps=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -Eq '^(examples/|config/crd/|config/samples/)'; then
+            echo "examples=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "examples=false" >> "$GITHUB_OUTPUT"
           fi
 
   version-consistency:
@@ -169,7 +190,9 @@ jobs:
 
   examples-smoke-test:
     name: Examples Smoke Test
+    if: needs.changes.outputs.examples == 'true'
     runs-on: ubuntu-latest
+    needs: [changes]
     steps:
       - uses: actions/checkout@v4
 
@@ -200,7 +223,9 @@ jobs:
 
   security-audit:
     name: Security Audit
+    if: needs.changes.outputs.deps == 'true'
     runs-on: ubuntu-latest
+    needs: [changes]
     steps:
       - uses: actions/checkout@v4
 
@@ -218,6 +243,7 @@ jobs:
   lint:
     name: Lint & Format
     runs-on: ubuntu-latest
+    needs: [changes]
     steps:
       - uses: actions/checkout@v4
 
@@ -252,9 +278,11 @@ jobs:
           "${shellcheck_cmd[@]}" "${shell_files[@]}"
 
       - name: Check formatting
+        if: needs.changes.outputs.rust_core == 'true'
         run: make fmt-check
 
       - name: Run clippy
+        if: needs.changes.outputs.rust_core == 'true'
         run: make lint
 
   test:
