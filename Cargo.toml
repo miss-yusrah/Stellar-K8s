@@ -10,6 +10,9 @@ repository = "https://github.com/stellar/stellar-k8s"
 [dependencies]
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 toml = "0.8"
+# Glob pattern matching for label propagation filters
+glob = "0.3"
+
 # Kubernetes client and operator framework
 kube = { version = "0.94", features = [
     "runtime",
@@ -18,7 +21,7 @@ kube = { version = "0.94", features = [
     "admission",
 ] }
 kube-runtime = { version = "0.94", features = ["unstable-runtime"] }
-k8s-openapi = { version = "0.22", default-features = false, features = [
+k8s-openapi = { version = "0.26", default-features = false, features = [
     "v1_30",
 ] }
 
@@ -32,7 +35,7 @@ serde_json = "1"
 serde_yaml = "0.9"
 
 # Schema generation for CRDs
-schemars = "0.8"
+schemars = "1.2"
 
 # Error handling
 thiserror = "1"
@@ -40,6 +43,7 @@ anyhow = "1"
 
 # CLI argument parsing
 clap = { version = "4.5", features = ["derive", "env"] }
+clap_complete = "4.5"
 
 # Date/time handling
 chrono = { version = "0.4", features = ["serde"] }
@@ -49,12 +53,18 @@ time = { version = "0.3.47", optional = true }
 # Pinned to fix RUSTSEC-2026-0007; used transitively by many HTTP/async crates.
 bytes = { version = "1.11.1", optional = true }
 
+# Zip compression for incident reports
+zip = "2"
+
 # Hostname for leader election
 hostname = "0.4"
 
+# Regex for log scrubbing patterns
+regex = "1"
+
 # Logging and tracing
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "registry"] }
 tracing-opentelemetry = "0.22"
 
 # OpenTelemetry for distributed tracing
@@ -120,6 +130,9 @@ pqcrypto-traits = "0.3.5"
 
 [build-dependencies]
 chrono = "0.4"
+serde_json = "1"
+walkdir = "2"
+serde = { version = "1", features = ["derive"] }
 
 [features]
 default = ["rest-api", "metrics", "admission-webhook"]
@@ -135,17 +148,31 @@ admission-webhook = [
     "tower-http",
 ]
 axum = ["dep:axum"]
+# Expose reconciler for state-machine fuzzing (reconcile_no_panic, event sequences)
+reconciler-fuzz = []
 
 [dev-dependencies]
 tokio-test = "0.4"
 tempfile = "3"
-wiremock = "0.6"
-wat = "1.245"
+wiremock = "=0.6.5"
+proptest = "1.5"
+wat = "1.246"
 
 [[bin]]
 name = "stellar-operator"
 path = "src/main.rs"
 
 [[bin]]
+name = "stellar-sidecar"
+path = "src/sidecar.rs"
+
+[[bin]]
 name = "kubectl-stellar"
 path = "src/kubectl_plugin.rs"
+
+[[bin]]
+name = "stellar-completions"
+path = "src/bin/completions.rs"
+
+[workspace]
+

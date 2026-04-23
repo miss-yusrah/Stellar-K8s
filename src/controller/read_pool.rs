@@ -397,7 +397,7 @@ fn build_read_config_map(node: &StellarNode) -> ConfigMap {
             script.push_str("RUN_STANDALONE=false\n");
             script.push_str(&format!(
                 "NETWORK_PASSPHRASE=\"{}\"\n",
-                node.spec.network.passphrase()
+                node.spec.network_passphrase()
             ));
             script.push_str("[HISTORY.h1]\n");
             script.push_str("get=\"curl -sf $SELECTED_ARCHIVE/{0} -o {1}\"\n\n");
@@ -508,6 +508,7 @@ fn build_read_pod_template(
                 }),
                 ..Default::default()
             }]),
+            affinity: super::resources::merge_workload_affinity(node),
             topology_spread_constraints: Some(super::resources::build_topology_spread_constraints(
                 &node.spec,
                 &node.name_any(),

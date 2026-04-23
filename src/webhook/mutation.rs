@@ -203,6 +203,11 @@ fn get_standard_labels(spec: &StellarNodeSpec, name: &str) -> BTreeMap<String, S
         format!("{:?}", spec.network).to_lowercase(),
     );
     labels.insert(
+        "stellar-network".to_string(),
+        spec.network
+            .scheduling_label_value(&spec.custom_network_passphrase),
+    );
+    labels.insert(
         "stellar.org/node-type".to_string(),
         format!("{:?}", spec.node_type).to_lowercase(),
     );
@@ -271,15 +276,13 @@ mod tests {
 
     #[test]
     fn test_standard_labels() {
-        use crate::crd::{HistoryMode, ResourceRequirements, StorageConfig};
-
         let spec = StellarNodeSpec {
             node_type: NodeType::Validator,
             network: StellarNetwork::Testnet,
             version: "v21.0.0".to_string(),
-            history_mode: HistoryMode::default(),
-            resources: ResourceRequirements::default(),
-            storage: StorageConfig::default(),
+            history_mode: Default::default(),
+            resources: Default::default(),
+            storage: Default::default(),
             validator_config: None,
             horizon_config: None,
             soroban_config: None,
@@ -299,6 +302,8 @@ mod tests {
             maintenance_mode: false,
             network_policy: None,
             dr_config: None,
+            pod_anti_affinity: Default::default(),
+            placement: Default::default(),
             topology_spread_constraints: None,
             cve_handling: None,
             snapshot_schedule: None,
@@ -311,6 +316,10 @@ mod tests {
             resource_meta: None,
             vpa_config: None,
             read_pool_endpoint: None,
+            sidecars: None,
+            label_propagation: None,
+            custom_network_passphrase: None,
+        nat_traversal: None,
         };
 
         let labels = get_standard_labels(&spec, "my-validator");
@@ -331,15 +340,13 @@ mod tests {
 
     #[test]
     fn test_standard_annotations() {
-        use crate::crd::{HistoryMode, ResourceRequirements, StorageConfig};
-
         let spec = StellarNodeSpec {
             node_type: NodeType::Horizon,
             network: StellarNetwork::Mainnet,
             version: "v2.31.0".to_string(),
-            history_mode: HistoryMode::default(),
-            resources: ResourceRequirements::default(),
-            storage: StorageConfig::default(),
+            history_mode: Default::default(),
+            resources: Default::default(),
+            storage: Default::default(),
             validator_config: None,
             horizon_config: None,
             soroban_config: None,
@@ -359,6 +366,8 @@ mod tests {
             maintenance_mode: false,
             network_policy: None,
             dr_config: None,
+            pod_anti_affinity: Default::default(),
+            placement: Default::default(),
             topology_spread_constraints: None,
             cve_handling: None,
             snapshot_schedule: None,
@@ -371,6 +380,10 @@ mod tests {
             resource_meta: None,
             vpa_config: None,
             read_pool_endpoint: None,
+            sidecars: None,
+            label_propagation: None,
+            custom_network_passphrase: None,
+        nat_traversal: None,
         };
 
         let annotations = get_standard_annotations(&spec);
