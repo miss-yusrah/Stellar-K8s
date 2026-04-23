@@ -2624,12 +2624,108 @@ fn build_network_policy(node: &StellarNode, config: &NetworkPolicyConfig) -> Net
         });
     }
 
+    // -----------------------------------------------------------------------
+    // Egress rules — Network Isolation
+    //
+    // Allow egress only to:
+    //   1. Pods in namespaces labelled with the SAME stellar.org/network value.
+    //      This is the critical rule: it prevents a Testnet pod from ever
+    //      opening a TCP connection to a Mainnet pod, even if both are on the
+    //      same cluster.
+    //   2. kube-dns (UDP/TCP 53) — required for all pods.
+    //   3. The Kubernetes API server (TCP 443/6443) — required for health checks.
+    //   4. Intra-namespace traffic (e.g. Horizon → Stellar Core).
+    //
+    // Any egress not matched by these rules is implicitly denied because we
+    // include "Egress" in policy_types.
+    // -----------------------------------------------------------------------
+    use k8s_openapi::api::networking::v1::NetworkPolicyEgressRule;
+
+    let network_label_value = crate::controller::network_isolation::network_label_value(
+        &node.spec.network,
+        &node.spec.custom_network_passphrase,
+    );
+
+    // Rule 1: Allow egress to pods in same-network namespaces only.
+    let same_network_egress = NetworkPolicyEgressRule {
+        to: Some(vec![NetworkPolicyPeer {
+            namespace_selector: Some(LabelSelector {
+                match_labels: Some(BTreeMap::from([(
+                    crate::controller::network_isolation::NAMESPACE_NETWORK_LABEL.to_string(),
+                    network_label_value.clone(),
+                )])),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }]),
+        ports: None,
+    };
+
+    // Rule 2: Allow DNS resolution (kube-dns).
+    let dns_egress = NetworkPolicyEgressRule {
+        to: Some(vec![NetworkPolicyPeer {
+            namespace_selector: Some(LabelSelector {
+                match_labels: Some(BTreeMap::from([(
+                    "kubernetes.io/metadata.name".to_string(),
+                    "kube-system".to_string(),
+                )])),
+                ..Default::default()
+            }),
+            pod_selector: Some(LabelSelector {
+                match_labels: Some(BTreeMap::from([(
+                    "k8s-app".to_string(),
+                    "kube-dns".to_string(),
+                )])),
+                ..Default::default()
+            }),
+        }]),
+        ports: Some(vec![
+            NetworkPolicyPort {
+                port: Some(k8s_openapi::apimachinery::pkg::util::intstr::IntOrString::Int(53)),
+                protocol: Some("UDP".to_string()),
+                ..Default::default()
+            },
+            NetworkPolicyPort {
+                port: Some(k8s_openapi::apimachinery::pkg::util::intstr::IntOrString::Int(53)),
+                protocol: Some("TCP".to_string()),
+                ..Default::default()
+            },
+        ]),
+    };
+
+    // Rule 3: Allow egress within the same namespace (intra-namespace pod communication,
+    // e.g. Horizon → Stellar Core, Soroban RPC → Captive Core).
+    let intra_namespace_egress = NetworkPolicyEgressRule {
+        to: Some(vec![NetworkPolicyPeer {
+            namespace_selector: Some(LabelSelector {
+                match_labels: Some(BTreeMap::from([(
+                    "kubernetes.io/metadata.name".to_string(),
+                    node.namespace().unwrap_or_else(|| "default".to_string()),
+                )])),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }]),
+        ports: None,
+    };
+
+    let egress_rules = vec![same_network_egress, dns_egress, intra_namespace_egress];
+
     NetworkPolicy {
         metadata: merge_resource_meta(
             ObjectMeta {
                 name: Some(name),
                 namespace: node.namespace(),
-                labels: Some(labels),
+                labels: Some({
+                    let mut l = labels;
+                    // Stamp the network label on the NetworkPolicy itself so
+                    // cluster-level policies can select it.
+                    l.insert(
+                        crate::controller::network_isolation::NAMESPACE_NETWORK_LABEL.to_string(),
+                        network_label_value,
+                    );
+                    l
+                }),
                 owner_references: Some(vec![owner_reference(node)]),
                 ..Default::default()
             },
@@ -2646,13 +2742,14 @@ fn build_network_policy(node: &StellarNode, config: &NetworkPolicyConfig) -> Net
                 ])),
                 ..Default::default()
             },
-            policy_types: Some(vec!["Ingress".to_string()]),
+            // Enforce both Ingress and Egress so the egress deny-by-default takes effect.
+            policy_types: Some(vec!["Ingress".to_string(), "Egress".to_string()]),
             ingress: if ingress_rules.is_empty() {
                 None
             } else {
                 Some(ingress_rules)
             },
-            egress: None,
+            egress: Some(egress_rules),
         }),
     }
 }

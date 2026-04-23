@@ -53,6 +53,7 @@ pub mod blue_green;
 pub mod feature_flags;
 pub mod label_propagation;
 pub mod maintenance;
+pub mod network_isolation;
 pub mod resource_meta;
 
 mod archive_health;
@@ -120,6 +121,10 @@ pub use feature_flags::{
 pub use finalizers::STELLAR_NODE_FINALIZER;
 pub use benchmark::run_benchmark_controller;
 pub use health::{check_node_health, HealthCheckResult};
+pub use network_isolation::{
+    check_network_safety, network_label_value, same_network_namespace_selector,
+    NetworkSafetyViolation, NAMESPACE_NETWORK_LABEL, NODE_NETWORK_LABEL,
+};
 pub use operator_config::{hardcoded_defaults, OperatorConfig};
 pub use peer_discovery::{
     get_peers_from_config_map, trigger_peer_config_reload, PeerDiscoveryConfig,
