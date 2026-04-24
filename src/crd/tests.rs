@@ -168,10 +168,14 @@ mod stellar_node_spec_validation {
             sidecars: None,
             custom_network_passphrase: None,
             nat_traversal: None,
+<<<<<<< four-issues
+=======
             cross_cloud_failover: None,
+>>>>>>> main
         }
     }
 
+    #[allow(dead_code)]
     fn default_resources() -> ResourceRequirements {
         ResourceRequirements {
             requests: ResourceSpec {
@@ -185,6 +189,7 @@ mod stellar_node_spec_validation {
         }
     }
 
+    #[allow(dead_code)]
     fn default_storage() -> StorageConfig {
         StorageConfig {
             storage_class: "standard".to_string(),
