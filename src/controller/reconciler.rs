@@ -1625,6 +1625,15 @@ pub(crate) async fn apply_stellar_node(
     )
     .await?;
 
+    // 6.5. Gas Autoscaling (Soroban RPC only)
+    if !ctx.dry_run && node.spec.node_type == NodeType::SorobanRpc {
+        if let Some(autoscaling) = &node.spec.autoscaling {
+            if let Some(gas_cfg) = &autoscaling.gas_autoscaling {
+                crate::controller::gas_autoscaling::ensure_gas_autoscaler_running(client.clone(), node, gas_cfg);
+            }
+        }
+    }
+
     // 6a. CSI VolumeSnapshot schedule (Validator only)
     if node.spec.node_type == NodeType::Validator {
         if let Some(ref snapshot_config) = node.spec.snapshot_schedule {

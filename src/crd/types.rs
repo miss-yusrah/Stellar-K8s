@@ -805,6 +805,9 @@ pub struct AutoscalingConfig {
     /// Only applicable to `Horizon` nodes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub predictive_scaling: Option<crate::controller::predictive_scaling::PredictiveScalingConfig>,
+    /// Gas-consumption-driven autoscaling configuration. Only valid for SorobanRPC nodes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gas_autoscaling: Option<GasAutoscalingConfig>,
 }
 
 /// Scaling behavior configuration for HPA
@@ -2232,4 +2235,108 @@ pub struct CrossCloudFailoverStatus {
 
     /// Timestamp of the last failover attempt (may have been blocked)
     pub last_failover_attempt: Option<String>,
+}
+
+// ── Gas Autoscaling default functions ────────────────────────────────────────
+
+fn default_gas_min_replicas() -> u32 {
+    1
+}
+
+fn default_gas_max_replicas() -> u32 {
+    5
+}
+
+fn default_scale_up_threshold() -> f64 {
+    2_000_000.0
+}
+
+fn default_scale_down_threshold() -> f64 {
+    500_000.0
+}
+
+fn default_target_gas_trend_score() -> f64 {
+    1_000_000.0
+}
+
+fn default_scale_step() -> u32 {
+    1
+}
+
+fn default_scale_up_cooldown() -> String {
+    "60s".to_string()
+}
+
+fn default_scale_down_cooldown() -> String {
+    "300s".to_string()
+}
+
+fn default_ledger_window() -> u32 {
+    10
+}
+
+fn default_ewma_alpha() -> f64 {
+    0.3
+}
+
+fn default_poll_interval_seconds() -> u32 {
+    6
+}
+
+/// Gas-consumption-driven autoscaling for Soroban RPC nodes.
+/// Only valid when spec.nodeType == SorobanRPC.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GasAutoscalingConfig {
+    /// Enable gas-based autoscaling.
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Minimum replica count. Must be >= 1.
+    #[serde(default = "default_gas_min_replicas")]
+    pub min_replicas: u32,
+
+    /// Maximum replica count. Must be >= min_replicas.
+    #[serde(default = "default_gas_max_replicas")]
+    pub max_replicas: u32,
+
+    /// Gas_Trend_Score above which a scale-up is triggered.
+    #[serde(default = "default_scale_up_threshold")]
+    pub scale_up_threshold: f64,
+
+    /// Gas_Trend_Score below which a scale-down is triggered.
+    #[serde(default = "default_scale_down_threshold")]
+    pub scale_down_threshold: f64,
+
+    /// HPA external metric target value (used by K8s HPA).
+    #[serde(default = "default_target_gas_trend_score")]
+    pub target_gas_trend_score: f64,
+
+    /// Number of replicas to add per scale-up event.
+    #[serde(default = "default_scale_step")]
+    pub scale_up_step: u32,
+
+    /// Number of replicas to remove per scale-down event.
+    #[serde(default = "default_scale_step")]
+    pub scale_down_step: u32,
+
+    /// Cooldown after a scale-up event (e.g. "60s", "2m").
+    #[serde(default = "default_scale_up_cooldown")]
+    pub scale_up_cooldown: String,
+
+    /// Cooldown after a scale-down event (e.g. "300s", "5m").
+    #[serde(default = "default_scale_down_cooldown")]
+    pub scale_down_cooldown: String,
+
+    /// Number of recent ledgers to include in the EWMA window.
+    #[serde(default = "default_ledger_window")]
+    pub ledger_window: u32,
+
+    /// EWMA decay factor alpha. Must be in (0.0, 1.0) exclusive.
+    #[serde(default = "default_ewma_alpha")]
+    pub ewma_alpha: f64,
+
+    /// Polling interval in seconds (default: 6, matching average ledger close time).
+    #[serde(default = "default_poll_interval_seconds")]
+    pub poll_interval_seconds: u32,
 }

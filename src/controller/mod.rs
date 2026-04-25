@@ -50,6 +50,7 @@
 
 pub mod benchmark;
 pub mod blue_green;
+pub mod gas_autoscaling;
 pub mod cross_cloud_failover;
 pub mod feature_flags;
 pub mod jurisdiction;

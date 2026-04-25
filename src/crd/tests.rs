@@ -1074,6 +1074,239 @@ mod stellar_node_spec_validation {
         assert!(spec.validate().is_ok());
     }
 
+    // =========================================================================
+    // GasAutoscalingConfig Validation Tests
+    // =========================================================================
+
+    #[test]
+    fn test_gas_autoscaling_min_gt_max_rejected() {
+        use crate::crd::GasAutoscalingConfig;
+
+        let mut spec = valid_soroban_spec();
+        spec.autoscaling = Some(AutoscalingConfig {
+            min_replicas: 1,
+            max_replicas: 10,
+            target_cpu_utilization_percentage: None,
+            custom_metrics: vec![],
+            behavior: None,
+            predictive_scaling: None,
+            gas_autoscaling: Some(GasAutoscalingConfig {
+                enabled: true,
+                min_replicas: 5,
+                max_replicas: 2,
+                scale_up_threshold: 2_000_000.0,
+                scale_down_threshold: 500_000.0,
+                ewma_alpha: 0.3,
+                ..Default::default()
+            }),
+        });
+
+        let result = spec.validate();
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        assert!(errors.iter().any(|e| {
+            e == &SpecValidationError::new(
+                "spec.autoscaling.gasAutoscaling.minReplicas",
+                "gasAutoscaling.minReplicas must be <= maxReplicas",
+                "Set spec.autoscaling.gasAutoscaling.minReplicas to a value less than or equal to maxReplicas.",
+            )
+        }));
+    }
+
+    #[test]
+    fn test_gas_autoscaling_alpha_zero_rejected() {
+        use crate::crd::GasAutoscalingConfig;
+
+        let mut spec = valid_soroban_spec();
+        spec.autoscaling = Some(AutoscalingConfig {
+            min_replicas: 1,
+            max_replicas: 10,
+            target_cpu_utilization_percentage: None,
+            custom_metrics: vec![],
+            behavior: None,
+            predictive_scaling: None,
+            gas_autoscaling: Some(GasAutoscalingConfig {
+                enabled: true,
+                min_replicas: 1,
+                max_replicas: 5,
+                scale_up_threshold: 2_000_000.0,
+                scale_down_threshold: 500_000.0,
+                ewma_alpha: 0.0,
+                ..Default::default()
+            }),
+        });
+
+        let result = spec.validate();
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        assert!(errors.iter().any(|e| {
+            e == &SpecValidationError::new(
+                "spec.autoscaling.gasAutoscaling.ewmaAlpha",
+                "gasAutoscaling.ewmaAlpha must be in range (0.0, 1.0) exclusive",
+                "Set spec.autoscaling.gasAutoscaling.ewmaAlpha to a value strictly between 0.0 and 1.0 (e.g. 0.3).",
+            )
+        }));
+    }
+
+    #[test]
+    fn test_gas_autoscaling_alpha_one_rejected() {
+        use crate::crd::GasAutoscalingConfig;
+
+        let mut spec = valid_soroban_spec();
+        spec.autoscaling = Some(AutoscalingConfig {
+            min_replicas: 1,
+            max_replicas: 10,
+            target_cpu_utilization_percentage: None,
+            custom_metrics: vec![],
+            behavior: None,
+            predictive_scaling: None,
+            gas_autoscaling: Some(GasAutoscalingConfig {
+                enabled: true,
+                min_replicas: 1,
+                max_replicas: 5,
+                scale_up_threshold: 2_000_000.0,
+                scale_down_threshold: 500_000.0,
+                ewma_alpha: 1.0,
+                ..Default::default()
+            }),
+        });
+
+        let result = spec.validate();
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        assert!(errors.iter().any(|e| {
+            e == &SpecValidationError::new(
+                "spec.autoscaling.gasAutoscaling.ewmaAlpha",
+                "gasAutoscaling.ewmaAlpha must be in range (0.0, 1.0) exclusive",
+                "Set spec.autoscaling.gasAutoscaling.ewmaAlpha to a value strictly between 0.0 and 1.0 (e.g. 0.3).",
+            )
+        }));
+    }
+
+    #[test]
+    fn test_gas_autoscaling_alpha_valid() {
+        use crate::crd::GasAutoscalingConfig;
+
+        let mut spec = valid_soroban_spec();
+        spec.autoscaling = Some(AutoscalingConfig {
+            min_replicas: 1,
+            max_replicas: 10,
+            target_cpu_utilization_percentage: None,
+            custom_metrics: vec![],
+            behavior: None,
+            predictive_scaling: None,
+            gas_autoscaling: Some(GasAutoscalingConfig {
+                enabled: true,
+                min_replicas: 1,
+                max_replicas: 5,
+                scale_up_threshold: 2_000_000.0,
+                scale_down_threshold: 500_000.0,
+                ewma_alpha: 0.3,
+                ..Default::default()
+            }),
+        });
+
+        assert!(spec.validate().is_ok());
+    }
+
+    #[test]
+    fn test_gas_autoscaling_threshold_ordering_rejected() {
+        use crate::crd::GasAutoscalingConfig;
+
+        let mut spec = valid_soroban_spec();
+        spec.autoscaling = Some(AutoscalingConfig {
+            min_replicas: 1,
+            max_replicas: 10,
+            target_cpu_utilization_percentage: None,
+            custom_metrics: vec![],
+            behavior: None,
+            predictive_scaling: None,
+            gas_autoscaling: Some(GasAutoscalingConfig {
+                enabled: true,
+                min_replicas: 1,
+                max_replicas: 5,
+                // scale_up_threshold <= scale_down_threshold — invalid
+                scale_up_threshold: 500_000.0,
+                scale_down_threshold: 500_000.0,
+                ewma_alpha: 0.3,
+                ..Default::default()
+            }),
+        });
+
+        let result = spec.validate();
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        assert!(errors.iter().any(|e| {
+            e == &SpecValidationError::new(
+                "spec.autoscaling.gasAutoscaling.scaleUpThreshold",
+                "gasAutoscaling.scaleUpThreshold must be greater than scaleDownThreshold",
+                "Set spec.autoscaling.gasAutoscaling.scaleUpThreshold to a value strictly greater than scaleDownThreshold.",
+            )
+        }));
+    }
+
+    #[test]
+    fn test_gas_autoscaling_non_soroban_rejected() {
+        use crate::crd::GasAutoscalingConfig;
+
+        // Use a Horizon node — gas autoscaling should be rejected
+        let mut spec = valid_horizon_spec();
+        spec.autoscaling = Some(AutoscalingConfig {
+            min_replicas: 1,
+            max_replicas: 10,
+            target_cpu_utilization_percentage: None,
+            custom_metrics: vec![],
+            behavior: None,
+            predictive_scaling: None,
+            gas_autoscaling: Some(GasAutoscalingConfig {
+                enabled: true,
+                min_replicas: 1,
+                max_replicas: 5,
+                scale_up_threshold: 2_000_000.0,
+                scale_down_threshold: 500_000.0,
+                ewma_alpha: 0.3,
+                ..Default::default()
+            }),
+        });
+
+        let result = spec.validate();
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        assert!(errors.iter().any(|e| {
+            e == &SpecValidationError::new(
+                "spec.autoscaling.gasAutoscaling",
+                "gasAutoscaling is only supported for SorobanRPC nodes",
+                "Remove spec.autoscaling.gasAutoscaling or set enabled: false for Horizon nodes; gas-based autoscaling is only supported for SorobanRpc.",
+            )
+        }));
+    }
+
+    #[test]
+    fn test_gas_autoscaling_valid_config() {
+        use crate::crd::GasAutoscalingConfig;
+
+        let mut spec = valid_soroban_spec();
+        spec.autoscaling = Some(AutoscalingConfig {
+            min_replicas: 2,
+            max_replicas: 10,
+            target_cpu_utilization_percentage: None,
+            custom_metrics: vec![],
+            behavior: None,
+            predictive_scaling: None,
+            gas_autoscaling: Some(GasAutoscalingConfig {
+                enabled: true,
+                min_replicas: 2,
+                max_replicas: 8,
+                scale_up_threshold: 2_000_000.0,
+                scale_down_threshold: 500_000.0,
+                ewma_alpha: 0.3,
+                ..Default::default()
+            }),
+        });
+
+        assert!(spec.validate().is_ok());
+    }
+
     #[test]
     fn test_soroban_config_serialization_roundtrip() {
         use crate::crd::{CaptiveCoreConfig, SorobanConfig};
