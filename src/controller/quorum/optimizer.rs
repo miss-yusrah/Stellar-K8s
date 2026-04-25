@@ -28,7 +28,7 @@ pub struct QuorumOptimizer {
 impl QuorumOptimizer {
     pub fn new(client: Client, reporter: Reporter) -> Self {
         // Initialize with a default timeout and window size for measurements
-        let analyzer = QuorumAnalyzer::new(Duration::from_secs(10), 50);
+        let analyzer = QuorumAnalyzer::new(Duration::from_secs(10), 50, 3);
         Self {
             client,
             reporter,

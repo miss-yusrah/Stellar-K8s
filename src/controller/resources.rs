@@ -1622,7 +1622,7 @@ fn build_pod_template(
             Volume {
                 name: "config".to_string(),
                 config_map: Some(k8s_openapi::api::core::v1::ConfigMapVolumeSource {
-                    name: resource_name(node, "config"),
+                    name: Some(resource_name(node, "config")),
                     ..Default::default()
                 }),
                 ..Default::default()
@@ -2045,7 +2045,7 @@ fn build_pod_template(
                 image: Some(sidecar_image),
                 args: Some(exporter_args),
                 ports: Some(vec![k8s_openapi::api::core::v1::ContainerPort {
-                    name: "metrics".to_string(),
+                    name: Some("metrics".to_string()),
                     container_port: 9435,
                     protocol: Some("TCP".to_string()),
                     ..Default::default()
@@ -3582,6 +3582,7 @@ fn build_network_policy(node: &StellarNode, config: &NetworkPolicyConfig) -> Net
                 )])),
                 ..Default::default()
             }),
+            ..Default::default()
         }]),
         ports: Some(vec![
             NetworkPolicyPort {
@@ -3635,30 +3636,32 @@ fn build_network_policy(node: &StellarNode, config: &NetworkPolicyConfig) -> Net
             },
             &node.spec.resource_meta,
         ),
-        spec: Some(NetworkPolicySpec {
-            pod_selector: LabelSelector {
-                match_labels: Some(BTreeMap::from([
-                    ("app.kubernetes.io/instance".to_string(), node.name_any()),
-                    (
-                        "app.kubernetes.io/name".to_string(),
-                        "stellar-node".to_string(),
-                    ),
-                ])),
-                ..Default::default()
-            },
-            // Enforce both Ingress and Egress so the egress deny-by-default takes effect.
-            policy_types: Some(vec!["Ingress".to_string(), "Egress".to_string()]),
-            ingress: if ingress_rules.is_empty() {
-                None
-            } else {
-                Some(ingress_rules)
-            },
-            egress: Some(egress_rules),
-            egress: if egress_rules.is_empty() {
-                None
-            } else {
-                Some(egress_rules)
-            },
+        spec: Some({
+            let mut policy_spec = NetworkPolicySpec {
+                pod_selector: LabelSelector {
+                    match_labels: Some(BTreeMap::from([
+                        ("app.kubernetes.io/instance".to_string(), node.name_any()),
+                        (
+                            "app.kubernetes.io/name".to_string(),
+                            "stellar-node".to_string(),
+                        ),
+                    ])),
+                    ..Default::default()
+                },
+                // Enforce both Ingress and Egress so the egress deny-by-default takes effect.
+                policy_types: Some(vec!["Ingress".to_string(), "Egress".to_string()]),
+                ingress: if ingress_rules.is_empty() {
+                    None
+                } else {
+                    Some(ingress_rules)
+                },
+                egress: if egress_rules.is_empty() {
+                    None
+                } else {
+                    Some(egress_rules)
+                },
+            };
+            policy_spec
         }),
     }
 }

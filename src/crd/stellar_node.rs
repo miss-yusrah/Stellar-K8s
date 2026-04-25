@@ -325,6 +325,7 @@ impl Default for StellarNodeSpec {
             cross_cloud_failover: None,
             hitless_upgrade: None,
             ebpf_config: None,
+            proximity_aware: false,
         }
     }
 }

@@ -143,7 +143,16 @@ enum Commands {
     },
     /// Generate an incident report for a specific time window
     IncidentReport(stellar_k8s::incident::IncidentReportArgs),
+    /// Execute a read-only SQL query against the node's internal database
+    Sql {
+        /// Name of the StellarNode
+        node_name: String,
+        /// SQL query to execute
+        query: String,
+    },
 }
+
+mod sql;
 
 #[tokio::main]
 async fn main() {
@@ -186,6 +195,9 @@ async fn run(cli: Cli) -> Result<()> {
             Commands::IncidentReport(_) => {
                 Some("Generate incident report (read-only, no cluster mutation)".to_string())
             }
+            Commands::Sql { node_name, .. } => Some(format!(
+                "Execute SQL query against StellarNode '{node_name}' (read-only)"
+            )),
         };
         if let Some(desc) = action {
             println!("[dry-run] Would: {desc}");
@@ -323,6 +335,18 @@ async fn run(cli: Cli) -> Result<()> {
             Ok(())
         }
         Commands::IncidentReport(args) => stellar_k8s::incident::run_incident_report(args).await,
+        Commands::Sql { node_name, query } => {
+            let client = Client::try_default().await.map_err(Error::KubeError)?;
+            let namespace = cli.namespace.as_deref().unwrap_or("default");
+            let output_format = match cli.output.to_lowercase().as_str() {
+                "json" => sql::OutputFormat::Json,
+                "csv" => sql::OutputFormat::Csv,
+                _ => sql::OutputFormat::Table,
+            };
+
+            let executor = sql::SqlExecutor::new(client, namespace.to_string());
+            executor.execute(&node_name, &query, output_format).await
+        }
     }
 }
 
