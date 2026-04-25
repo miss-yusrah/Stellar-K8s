@@ -394,6 +394,67 @@ pub enum RetentionPolicy {
     Retain,
 }
 
+// ============================================================================
+// cert-manager integration
+// ============================================================================
+
+/// Reference to a cert-manager Issuer or ClusterIssuer.
+///
+/// When set on a `StellarNode`, the operator will create a cert-manager
+/// `Certificate` resource for the node instead of issuing a self-signed
+/// certificate with `rcgen`. cert-manager then manages rotation automatically.
+///
+/// # Example
+/// ```yaml
+/// certManager:
+///   issuerRef:
+///     name: letsencrypt-prod
+///     kind: ClusterIssuer
+///   duration: "2160h"   # 90 days
+///   renewBefore: "720h" # 30 days
+/// ```
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CertManagerConfig {
+    /// Reference to the Issuer or ClusterIssuer that will sign the certificate.
+    pub issuer_ref: CertManagerIssuerRef,
+
+    /// Requested certificate duration (e.g. `"2160h"` for 90 days).
+    /// Defaults to cert-manager's default (90 days) when omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration: Option<String>,
+
+    /// How long before expiry cert-manager should renew the certificate
+    /// (e.g. `"720h"` for 30 days). Defaults to cert-manager's default when omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub renew_before: Option<String>,
+}
+
+/// Reference to a cert-manager issuer resource.
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CertManagerIssuerRef {
+    /// Name of the Issuer or ClusterIssuer resource.
+    pub name: String,
+
+    /// Kind of the issuer: `"Issuer"` (namespace-scoped) or `"ClusterIssuer"` (cluster-scoped).
+    /// Defaults to `"Issuer"` when omitted.
+    #[serde(default = "default_issuer_kind")]
+    pub kind: String,
+
+    /// API group of the issuer. Defaults to `"cert-manager.io"`.
+    #[serde(default = "default_issuer_group")]
+    pub group: String,
+}
+
+fn default_issuer_kind() -> String {
+    "Issuer".to_string()
+}
+
+fn default_issuer_group() -> String {
+    "cert-manager.io".to_string()
+}
+
 /// Configuration for zero-downtime CSI VolumeSnapshot scheduling
 ///
 /// When set, the operator will create Kubernetes VolumeSnapshot resources targeting
@@ -729,7 +790,7 @@ pub struct SecretKeyRef {
 }
 
 /// Ingress configuration
-#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct IngressConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -749,7 +810,7 @@ pub struct IngressConfig {
 }
 
 /// Ingress host entry
-#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct IngressHost {
     pub host: String,
@@ -761,7 +822,7 @@ pub struct IngressHost {
 }
 
 /// Ingress path mapping
-#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct IngressPath {
     pub path: String,
@@ -785,7 +846,7 @@ fn default_max_events() -> u32 {
 }
 
 /// Horizontal Pod Autoscaling configuration
-#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AutoscalingConfig {
     pub min_replicas: i32,
@@ -805,10 +866,28 @@ pub struct AutoscalingConfig {
     /// Only applicable to `Horizon` nodes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub predictive_scaling: Option<crate::controller::predictive_scaling::PredictiveScalingConfig>,
+    /// Gas-consumption-driven autoscaling configuration. Only valid for SorobanRPC nodes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gas_autoscaling: Option<GasAutoscalingConfig>,
+}
+
+/// eBPF-based proactive failure detection configuration
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EbpfConfig {
+    /// Enable the eBPF exporter sidecar
+    #[serde(default)]
+    pub enabled: bool,
+    /// Monitor write() latency to the ledger DB
+    #[serde(default = "default_true")]
+    pub monitor_write_latency: bool,
+    /// Track TCP retransmits and handshake times for peer connections
+    #[serde(default = "default_true")]
+    pub monitor_tcp_retransmits: bool,
 }
 
 /// Scaling behavior configuration for HPA
-#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ScalingBehavior {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -818,7 +897,7 @@ pub struct ScalingBehavior {
 }
 
 /// Scaling policy
-#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ScalingPolicy {
     pub stabilization_window_seconds: Option<i32>,
@@ -1048,6 +1127,7 @@ impl Default for LoadBalancerConfig {
             annotations: None,
             health_check_enabled: true,
             health_check_port: default_health_check_port(),
+            external_dns: None,
         }
     }
 }
@@ -2215,7 +2295,7 @@ pub struct CrossCloudFailoverStatus {
     pub active_cloud: Option<String>,
 
     /// Health status of each cloud endpoint
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cloud_health: Option<Vec<crate::controller::cross_cloud_failover::CloudHealthStatus>>,
 
     /// Timestamp of the last health check
@@ -2388,4 +2468,106 @@ pub struct PruningStatus {
 
     /// Whether the last operation was a dry-run
     pub dry_run: Option<bool>,
+// ── Gas Autoscaling default functions ────────────────────────────────────────
+
+fn default_gas_min_replicas() -> u32 {
+    1
+}
+
+fn default_gas_max_replicas() -> u32 {
+    5
+}
+
+fn default_scale_up_threshold() -> f64 {
+    2_000_000.0
+}
+
+fn default_scale_down_threshold() -> f64 {
+    500_000.0
+}
+
+fn default_target_gas_trend_score() -> f64 {
+    1_000_000.0
+}
+
+fn default_scale_step() -> u32 {
+    1
+}
+
+fn default_scale_up_cooldown() -> String {
+    "60s".to_string()
+}
+
+fn default_scale_down_cooldown() -> String {
+    "300s".to_string()
+}
+
+fn default_ledger_window() -> u32 {
+    10
+}
+
+fn default_ewma_alpha() -> f64 {
+    0.3
+}
+
+fn default_poll_interval_seconds() -> u32 {
+    6
+}
+
+/// Gas-consumption-driven autoscaling for Soroban RPC nodes.
+/// Only valid when spec.nodeType == SorobanRPC.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GasAutoscalingConfig {
+    /// Enable gas-based autoscaling.
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Minimum replica count. Must be >= 1.
+    #[serde(default = "default_gas_min_replicas")]
+    pub min_replicas: u32,
+
+    /// Maximum replica count. Must be >= min_replicas.
+    #[serde(default = "default_gas_max_replicas")]
+    pub max_replicas: u32,
+
+    /// Gas_Trend_Score above which a scale-up is triggered.
+    #[serde(default = "default_scale_up_threshold")]
+    pub scale_up_threshold: f64,
+
+    /// Gas_Trend_Score below which a scale-down is triggered.
+    #[serde(default = "default_scale_down_threshold")]
+    pub scale_down_threshold: f64,
+
+    /// HPA external metric target value (used by K8s HPA).
+    #[serde(default = "default_target_gas_trend_score")]
+    pub target_gas_trend_score: f64,
+
+    /// Number of replicas to add per scale-up event.
+    #[serde(default = "default_scale_step")]
+    pub scale_up_step: u32,
+
+    /// Number of replicas to remove per scale-down event.
+    #[serde(default = "default_scale_step")]
+    pub scale_down_step: u32,
+
+    /// Cooldown after a scale-up event (e.g. "60s", "2m").
+    #[serde(default = "default_scale_up_cooldown")]
+    pub scale_up_cooldown: String,
+
+    /// Cooldown after a scale-down event (e.g. "300s", "5m").
+    #[serde(default = "default_scale_down_cooldown")]
+    pub scale_down_cooldown: String,
+
+    /// Number of recent ledgers to include in the EWMA window.
+    #[serde(default = "default_ledger_window")]
+    pub ledger_window: u32,
+
+    /// EWMA decay factor alpha. Must be in (0.0, 1.0) exclusive.
+    #[serde(default = "default_ewma_alpha")]
+    pub ewma_alpha: f64,
+
+    /// Polling interval in seconds (default: 6, matching average ledger close time).
+    #[serde(default = "default_poll_interval_seconds")]
+    pub poll_interval_seconds: u32,
 }

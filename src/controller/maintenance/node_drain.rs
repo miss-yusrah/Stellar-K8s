@@ -11,7 +11,7 @@ use k8s_openapi::api::core::v1::{Node, Pod};
 use k8s_openapi::api::policy::v1::Eviction;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::{
-    api::{Api, ListParams, PostParams},
+    api::{Api, EvictParams, ListParams, PostParams},
     runtime::{
         events::{EventType, Recorder, Reporter},
         watcher::{self, Config},
@@ -56,21 +56,18 @@ impl NodeDrainOrchestrator {
         let mut stream = watcher::watcher(nodes, wc).boxed();
         while let Some(event) = stream.next().await {
             match event {
-                Ok(watcher::Event::Applied(node)) => {
+                Ok(watcher::Event::Apply(node)) => {
                     if self.is_node_cordoned(&node) {
                         self.handle_cordoned_node(node).await?;
                     }
                 }
-                Ok(watcher::Event::Deleted(node)) => {
+                Ok(watcher::Event::Delete(node)) => {
                     debug!("Node {} deleted, skipping", node.name_any());
                 }
-                Ok(watcher::Event::Restarted(nodes)) => {
-                    for node in nodes {
-                        if self.is_node_cordoned(&node) {
-                            self.handle_cordoned_node(node).await?;
-                        }
-                    }
+                Ok(watcher::Event::Init) => {
+                    info!("Node watcher initialized, performing initial scan");
                 }
+                Ok(_) => {}
                 Err(e) => error!("Node watcher error: {}", e),
             }
         }
@@ -161,10 +158,8 @@ impl NodeDrainOrchestrator {
         };
 
         let pod_api: Api<Pod> = Api::namespaced(self.client.clone(), &namespace);
-        match pod_api
-            .evict(&pod_name, &PostParams::default(), &eviction)
-            .await
-        {
+        let ep = EvictParams::default();
+        match pod_api.evict(&pod_name, &ep).await {
             Ok(_) => {
                 info!("Successfully triggered eviction for pod {}", pod_name);
                 recorder

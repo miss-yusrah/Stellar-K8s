@@ -143,7 +143,43 @@ enum Commands {
     },
     /// Generate an incident report for a specific time window
     IncidentReport(stellar_k8s::incident::IncidentReportArgs),
+    /// Execute a read-only SQL query against the node's internal database
+    Sql {
+        /// Name of the StellarNode
+        node_name: String,
+        /// SQL query to execute
+        query: String,
+    },
+    /// Inspect compliance audit trails
+    Audit {
+        #[command(subcommand)]
+        command: AuditCommands,
+    },
 }
+
+#[derive(Debug, Subcommand)]
+pub enum AuditCommands {
+    /// List recent audit entries
+    List {
+        /// Number of entries to show
+        #[arg(short, long, default_value = "50")]
+        limit: usize,
+        /// Filter by resource name
+        #[arg(short, long)]
+        resource: Option<String>,
+        /// Filter by actor
+        #[arg(short, long)]
+        actor: Option<String>,
+    },
+    /// Show detailed diff for a specific audit entry
+    Show {
+        /// Audit entry ID
+        id: String,
+    },
+}
+
+mod sql;
+mod audit_report;
 
 #[tokio::main]
 async fn main() {
@@ -185,6 +221,12 @@ async fn run(cli: Cli) -> Result<()> {
             }
             Commands::IncidentReport(_) => {
                 Some("Generate incident report (read-only, no cluster mutation)".to_string())
+            }
+            Commands::Sql { node_name, .. } => Some(format!(
+                "Execute SQL query against StellarNode '{node_name}' (read-only)"
+            )),
+            Commands::Audit { .. } => {
+                Some("Inspect compliance audit trails (read-only)".to_string())
             }
         };
         if let Some(desc) = action {
@@ -323,6 +365,34 @@ async fn run(cli: Cli) -> Result<()> {
             Ok(())
         }
         Commands::IncidentReport(args) => stellar_k8s::incident::run_incident_report(args).await,
+        Commands::Sql { node_name, query } => {
+            let client = Client::try_default().await.map_err(Error::KubeError)?;
+            let namespace = cli.namespace.as_deref().unwrap_or("default");
+            let output_format = match cli.output.to_lowercase().as_str() {
+                "json" => sql::OutputFormat::Json,
+                "csv" => sql::OutputFormat::Csv,
+                _ => sql::OutputFormat::Table,
+            };
+
+            let executor = sql::SqlExecutor::new(client, namespace.to_string());
+            executor.execute(&node_name, &query, output_format).await
+        }
+        Commands::Audit { command } => {
+            let bucket = std::env::var("STELLAR_AUDIT_BUCKET")
+                .map_err(|_| Error::ConfigError("STELLAR_AUDIT_BUCKET environment variable must be set to access audit logs".to_string()))?;
+            let prefix = std::env::var("STELLAR_AUDIT_PREFIX").unwrap_or_else(|_| "audit-logs/".to_string());
+            
+            let reporter = audit_report::AuditReporter::new(bucket, prefix).await;
+            
+            match command {
+                AuditCommands::List { limit, resource, actor } => {
+                    reporter.list(limit, resource, actor).await
+                }
+                AuditCommands::Show { id } => {
+                    reporter.show(&id).await
+                }
+            }
+        }
     }
 }
 
@@ -912,9 +982,11 @@ mod tests {
                 resource_meta: None,
                 read_pool_endpoint: None,
                 sidecars: None,
+            cert_manager: None,
                 history_mode: Default::default(),
                 custom_network_passphrase: None,
                 nat_traversal: None,
+                ..Default::default()
             },
             status: Some(StellarNodeStatus {
                 #[allow(deprecated)]
@@ -939,6 +1011,7 @@ mod tests {
                 vault_observed_secret_version: None,
                 forensic_snapshot_phase: None,
                 label_propagation_status: None,
+                ..Default::default()
             }),
         }
     }

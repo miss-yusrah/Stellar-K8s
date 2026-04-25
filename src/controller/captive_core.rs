@@ -263,10 +263,12 @@ mod tests {
                 vpa_config: None,
                 read_pool_endpoint: None,
                 sidecars: None,
+            cert_manager: None,
                 nat_traversal: None,
                 custom_network_passphrase: None,
                 cross_cloud_failover: None,
                 hitless_upgrade: None,
+                ..Default::default()
             },
             status: None,
         }

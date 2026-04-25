@@ -51,6 +51,7 @@ mod tests {
             vpa_config: None,
             read_pool_endpoint: None,
             sidecars: None,
+            cert_manager: None,
             custom_network_passphrase: None,
             history_mode: Default::default(),
             resources: Default::default(),
@@ -58,9 +59,9 @@ mod tests {
             validator_config: None,
             horizon_config: None,
             soroban_config: None,
-            nat_traversal: None,
             cross_cloud_failover: None,
             hitless_upgrade: None,
+            ..Default::default()
         }
     }
 
@@ -127,10 +128,12 @@ mod tests {
                 vpa_config: None,
                 read_pool_endpoint: None,
                 sidecars: None,
+            cert_manager: None,
                 custom_network_passphrase: None,
                 nat_traversal: None,
                 cross_cloud_failover: None,
                 hitless_upgrade: None,
+                ..Default::default()
             },
             status: None,
         }
@@ -190,10 +193,12 @@ mod tests {
                 vpa_config: None,
                 read_pool_endpoint: None,
                 sidecars: None,
+            cert_manager: None,
                 custom_network_passphrase: None,
                 nat_traversal: None,
                 cross_cloud_failover: None,
                 hitless_upgrade: None,
+                ..Default::default()
             },
             status: None,
         }

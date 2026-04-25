@@ -47,6 +47,7 @@ use crate::crd::{
     StellarNodeStatus,
 };
 use crate::error::{Error, Result};
+#[cfg(feature = "metrics")]
 use crate::infra;
 
 use super::archive_health::{
@@ -76,6 +77,8 @@ use super::resources;
 use super::service_mesh;
 use super::vpa as vpa_controller;
 use super::vsl;
+use super::audit_worker::AuditWorker;
+use super::audit_sink::{AuditSink, S3AuditSink, NoopAuditSink};
 
 // Constants
 #[allow(dead_code)]
@@ -221,6 +224,7 @@ pub struct ControllerState {
     /// Optional OIDC configuration for JWT-based authentication on the REST API.
     /// When `Some`, the OIDC middleware is active; when `None`, the operator falls
     /// back to Kubernetes RBAC token validation.
+    #[cfg(feature = "rest-api")]
     pub oidc_config: Option<crate::rest_api::OidcConfig>,
 }
 
@@ -332,7 +336,7 @@ pub async fn run_controller(state: Arc<ControllerState>) -> Result<()> {
     });
 
     // Start Quorum Optimizer in the background
-    let quorum_optimizer = Arc::new(quorum::QuorumOptimizer::new(
+    let quorum_optimizer = Arc::new(super::quorum::QuorumOptimizer::new(
         client.clone(),
         state.event_reporter.clone(),
     ));
@@ -341,6 +345,22 @@ pub async fn run_controller(state: Arc<ControllerState>) -> Result<()> {
             error!("Quorum Optimizer stopped with error: {}", e);
         }
     });
+
+    // Start Audit Worker if enabled
+    if state.operator_config.audit.enabled {
+        let sink: Arc<dyn AuditSink> = if let Some(s3_config) = &state.operator_config.audit.s3 {
+            Arc::new(S3AuditSink::new(s3_config.clone()).await)
+        } else {
+            Arc::new(NoopAuditSink)
+        };
+        
+        let audit_worker = AuditWorker::new(client.clone(), sink);
+        tokio::spawn(async move {
+            if let Err(e) = audit_worker.run().await {
+                error!("Audit Worker stopped with error: {}", e);
+            }
+        });
+    }
 
     Controller::new(stellar_nodes, Config::default())
         // Watch owned resources for changes
@@ -1182,6 +1202,11 @@ pub(crate) async fn apply_stellar_node(
     apply_or_emit(ctx, node, ActionType::Update, "mTLS certificates", async {
         mtls::ensure_ca(client, &namespace).await?;
         mtls::ensure_node_cert(client, node).await?;
+        // If cert-manager is configured, also create the Certificate CR so
+        // cert-manager takes over issuance and rotation going forward.
+        if let Some(cm_cfg) = &node.spec.cert_manager {
+            mtls::ensure_cert_manager_certificate(client, node, cm_cfg).await?;
+        }
         Ok(())
     })
     .await?;
@@ -1625,6 +1650,19 @@ pub(crate) async fn apply_stellar_node(
     )
     .await?;
 
+    // 6.5. Gas Autoscaling (Soroban RPC only)
+    if !ctx.dry_run && node.spec.node_type == NodeType::SorobanRpc {
+        if let Some(autoscaling) = &node.spec.autoscaling {
+            if let Some(gas_cfg) = &autoscaling.gas_autoscaling {
+                crate::controller::gas_autoscaling::ensure_gas_autoscaler_running(
+                    client.clone(),
+                    node,
+                    gas_cfg,
+                );
+            }
+        }
+    }
+
     // 6a. CSI VolumeSnapshot schedule (Validator only)
     if node.spec.node_type == NodeType::Validator {
         if let Some(ref snapshot_config) = node.spec.snapshot_schedule {
@@ -1652,6 +1690,7 @@ pub(crate) async fn apply_stellar_node(
                     .num_seconds();
                 if age < 15 {
                     info!("Skipping health polling for {}/{}, DB trigger recently updated status {}s ago", namespace, name, age);
+                    #[cfg(feature = "metrics")]
                     crate::controller::metrics::inc_api_polls_avoided(&namespace, &name);
                     skipped_poll = true;
                     // Assume node is healthy, use the reactively set ledger sequence
@@ -2493,20 +2532,17 @@ async fn measure_canary_error_rate(
         .labels(&format!("app.kubernetes.io/instance={canary_name}"));
 
     let pods = pod_api.list(&lp).await.map_err(Error::KubeError)?;
-    let pod = pods
-        .items
-        .iter()
-        .find(|p| {
-            p.status
-                .as_ref()
-                .and_then(|s| s.conditions.as_ref())
-                .map(|conds| {
-                    conds
-                        .iter()
-                        .any(|c| c.type_ == "Ready" && c.status == "True")
-                })
-                .unwrap_or(false)
-        });
+    let pod = pods.items.iter().find(|p| {
+        p.status
+            .as_ref()
+            .and_then(|s| s.conditions.as_ref())
+            .map(|conds| {
+                conds
+                    .iter()
+                    .any(|c| c.type_ == "Ready" && c.status == "True")
+            })
+            .unwrap_or(false)
+    });
 
     let pod_ip = match pod.and_then(|p| p.status.as_ref()?.pod_ip.as_deref()) {
         Some(ip) => ip.to_string(),
@@ -3237,17 +3273,20 @@ async fn run_archive_checkpoint_verification(
     };
 
     // Update metrics
-    let node_type = format!("{:?}", node.spec.node_type);
-    let network = format!("{:?}", node.spec.network);
-    let hardware = hardware_generation_for_metrics(client, node).await;
-    metrics::set_archive_integrity_status(
-        &namespace,
-        &name,
-        &node_type,
-        &network,
-        &hardware,
-        all_healthy,
-    );
+    #[cfg(feature = "metrics")]
+    {
+        let node_type = format!("{:?}", node.spec.node_type);
+        let network = format!("{:?}", node.spec.network);
+        let hardware = hardware_generation_for_metrics(client, node).await;
+        metrics::set_archive_integrity_status(
+            &namespace,
+            &name,
+            &node_type,
+            &network,
+            &hardware,
+            all_healthy,
+        );
+    }
 
     // Update status conditions
     let mut status = node.status.clone().unwrap_or_default();
