@@ -256,5 +256,20 @@ mod tests {
         };
 
         assert!(PruningWorker::new(policy).is_err());
+
+        // Concurrency is 0
+        let policy = PruningPolicy {
+            enabled: true,
+            retention_days: Some(30),
+            retention_ledgers: None,
+            min_checkpoints: 50,
+            max_age_days: 7,
+            concurrency: 0,
+            schedule: None,
+            auto_delete: false,
+            skip_confirmation: false,
+        };
+
+        assert!(PruningWorker::new(policy).is_err());
     }
 }
