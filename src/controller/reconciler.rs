@@ -1182,6 +1182,11 @@ pub(crate) async fn apply_stellar_node(
     apply_or_emit(ctx, node, ActionType::Update, "mTLS certificates", async {
         mtls::ensure_ca(client, &namespace).await?;
         mtls::ensure_node_cert(client, node).await?;
+        // If cert-manager is configured, also create the Certificate CR so
+        // cert-manager takes over issuance and rotation going forward.
+        if let Some(cm_cfg) = &node.spec.cert_manager {
+            mtls::ensure_cert_manager_certificate(client, node, cm_cfg).await?;
+        }
         Ok(())
     })
     .await?;

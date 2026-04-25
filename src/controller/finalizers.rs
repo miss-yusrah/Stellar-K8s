@@ -170,6 +170,7 @@ mod tests {
             read_pool_endpoint: None,
             resource_meta: None,
             sidecars: None,
+            cert_manager: None,
             nat_traversal: None,
             custom_network_passphrase: None,
             cross_cloud_failover: None,

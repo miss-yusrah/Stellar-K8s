@@ -55,6 +55,7 @@ mod tests {
                 vpa_config: None,
                 read_pool_endpoint: None,
                 sidecars: None,
+            cert_manager: None,
                 history_mode: Default::default(),
                 resources: Default::default(),
                 storage: Default::default(),

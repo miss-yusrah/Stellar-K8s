@@ -10,7 +10,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::types::{
-    AutoscalingConfig, Condition, CrossClusterConfig, DisasterRecoveryConfig,
+    AutoscalingConfig, CertManagerConfig, Condition, CrossClusterConfig, DisasterRecoveryConfig,
     DisasterRecoveryStatus, ExternalDatabaseConfig, ForensicSnapshotConfig, GlobalDiscoveryConfig,
     HistoryMode, HorizonConfig, IngressConfig, LabelPropagationConfig, LoadBalancerConfig,
     ManagedDatabaseConfig, NetworkPolicyConfig, NodeType, OciSnapshotConfig, PlacementConfig,
@@ -192,6 +192,27 @@ pub struct StellarNodeSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub service_mesh: Option<super::service_mesh::ServiceMeshConfig>,
 
+    /// cert-manager integration for automatic mTLS certificate issuance and rotation.
+    ///
+    /// When set, the operator creates a cert-manager `Certificate` resource for this node
+    /// instead of issuing a self-signed certificate internally. cert-manager handles
+    /// renewal automatically; the operator watches the resulting Secret and triggers a
+    /// rolling restart when the certificate is rotated.
+    ///
+    /// Requires cert-manager v1.x to be installed in the cluster.
+    ///
+    /// # Example
+    /// ```yaml
+    /// certManager:
+    ///   issuerRef:
+    ///     name: letsencrypt-prod
+    ///     kind: ClusterIssuer
+    ///   duration: "2160h"
+    ///   renewBefore: "720h"
+    /// ```
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cert_manager: Option<CertManagerConfig>,
+
     /// Forensic snapshot: set `metadata.annotations["stellar.org/request-forensic-snapshot"]="true"`
     /// to trigger a one-shot capture (PCAP, optional core dump) uploaded to S3.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -314,6 +335,7 @@ impl Default for StellarNodeSpec {
             resource_meta: None,
             custom_network_passphrase: None,
             sidecars: None,
+            cert_manager: None,
             probes: None,
             cross_cloud_failover: None,
             hitless_upgrade: None,

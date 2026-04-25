@@ -60,6 +60,7 @@ mod tests {
             read_replica_config: None,
             read_pool_endpoint: None,
             sidecars: None,
+            cert_manager: None,
             db_maintenance_config: None,
             oci_snapshot: None,
             service_mesh: None,

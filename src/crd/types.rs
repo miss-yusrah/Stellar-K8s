@@ -394,6 +394,67 @@ pub enum RetentionPolicy {
     Retain,
 }
 
+// ============================================================================
+// cert-manager integration
+// ============================================================================
+
+/// Reference to a cert-manager Issuer or ClusterIssuer.
+///
+/// When set on a `StellarNode`, the operator will create a cert-manager
+/// `Certificate` resource for the node instead of issuing a self-signed
+/// certificate with `rcgen`. cert-manager then manages rotation automatically.
+///
+/// # Example
+/// ```yaml
+/// certManager:
+///   issuerRef:
+///     name: letsencrypt-prod
+///     kind: ClusterIssuer
+///   duration: "2160h"   # 90 days
+///   renewBefore: "720h" # 30 days
+/// ```
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CertManagerConfig {
+    /// Reference to the Issuer or ClusterIssuer that will sign the certificate.
+    pub issuer_ref: CertManagerIssuerRef,
+
+    /// Requested certificate duration (e.g. `"2160h"` for 90 days).
+    /// Defaults to cert-manager's default (90 days) when omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration: Option<String>,
+
+    /// How long before expiry cert-manager should renew the certificate
+    /// (e.g. `"720h"` for 30 days). Defaults to cert-manager's default when omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub renew_before: Option<String>,
+}
+
+/// Reference to a cert-manager issuer resource.
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CertManagerIssuerRef {
+    /// Name of the Issuer or ClusterIssuer resource.
+    pub name: String,
+
+    /// Kind of the issuer: `"Issuer"` (namespace-scoped) or `"ClusterIssuer"` (cluster-scoped).
+    /// Defaults to `"Issuer"` when omitted.
+    #[serde(default = "default_issuer_kind")]
+    pub kind: String,
+
+    /// API group of the issuer. Defaults to `"cert-manager.io"`.
+    #[serde(default = "default_issuer_group")]
+    pub group: String,
+}
+
+fn default_issuer_kind() -> String {
+    "Issuer".to_string()
+}
+
+fn default_issuer_group() -> String {
+    "cert-manager.io".to_string()
+}
+
 /// Configuration for zero-downtime CSI VolumeSnapshot scheduling
 ///
 /// When set, the operator will create Kubernetes VolumeSnapshot resources targeting
