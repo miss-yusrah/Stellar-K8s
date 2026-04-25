@@ -10,13 +10,13 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::types::{
-    AutoscalingConfig, Condition, CrossClusterConfig, DisasterRecoveryConfig,
+    AutoscalingConfig, Condition, CoreSyncState, CrossClusterConfig, DisasterRecoveryConfig,
     DisasterRecoveryStatus, ExternalDatabaseConfig, ForensicSnapshotConfig, GlobalDiscoveryConfig,
     HistoryMode, HorizonConfig, IngressConfig, LabelPropagationConfig, LoadBalancerConfig,
     ManagedDatabaseConfig, NetworkPolicyConfig, NodeType, OciSnapshotConfig, PlacementConfig,
     PodAntiAffinityStrength, ProbeConfig, ResourceRequirements, RestoreFromSnapshotConfig,
     RetentionPolicy, RolloutStrategy, SnapshotScheduleConfig, SorobanConfig, StellarNetwork,
-    StorageConfig, ValidatorConfig, VpaConfig,
+    StorageConfig, SyncStateScalingConfig, ValidatorConfig, VpaConfig,
 };
 
 /// Structured validation error for `StellarNodeSpec`
@@ -113,6 +113,15 @@ pub struct StellarNodeSpec {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vpa_config: Option<VpaConfig>,
+
+    /// Dynamic resource scaling based on Stellar Core sync state.
+    ///
+    /// When enabled, the operator boosts CPU/memory while the node is catching up
+    /// on historical ledgers, then scales back once it reaches `Synced` state.
+    /// Uses in-place pod resource updates (requires Kubernetes 1.27+ with
+    /// `InPlacePodVerticalScaling` feature gate).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_state_scaling: Option<SyncStateScalingConfig>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ingress: Option<IngressConfig>,
@@ -1177,6 +1186,16 @@ pub struct StellarNodeStatus {
     /// Cross-cloud failover status (Horizon/SorobanRpc nodes only)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cross_cloud_failover_status: Option<crate::crd::CrossCloudFailoverStatus>,
+
+    /// Current observed sync state of the Stellar Core node.
+    /// One of: `CatchingUp`, `Synced`, `Unknown`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_state: Option<CoreSyncState>,
+
+    /// Whether sync-state-driven resource scaling is currently active and which
+    /// profile is applied (`CatchingUp` or `Synced`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_scaling_active_profile: Option<String>,
 }
 
 /// BGP advertisement status information
