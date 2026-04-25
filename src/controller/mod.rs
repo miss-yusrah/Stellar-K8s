@@ -56,6 +56,7 @@ pub mod gas_autoscaling;
 pub mod jurisdiction;
 pub mod label_propagation;
 pub mod maintenance;
+pub mod canary;
 pub mod network_isolation;
 pub mod predictive_scaling;
 pub mod pss;
