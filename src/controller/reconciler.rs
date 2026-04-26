@@ -124,16 +124,6 @@ impl ToControllerStateArc for &Arc<ControllerState> {
         (*self).clone()
     }
 }
-impl ToControllerStateArc for ControllerState {
-    fn to_arc_controller(&self) -> Arc<ControllerState> {
-        Arc::new(self.clone())
-    }
-}
-impl ToControllerStateArc for &ControllerState {
-    fn to_arc_controller(&self) -> Arc<ControllerState> {
-        Arc::new((*self).clone())
-    }
-}
 
 macro_rules! emit_event {
     ($client:expr, $reporter:expr, $node:expr, $type:expr, $reason:expr, $action:expr, $note:expr $(,)?) => {
@@ -859,7 +849,7 @@ pub(crate) fn apply_stellar_node(
             let message = format_spec_validation_errors(&errors);
             warn!("Validation failed for {}/{}: {}", namespace, name, message);
             emit_spec_validation_event(&client, &ctx.event_reporter, &node, &errors).await?;
-            update_status(&client, &node, "Failed", Some(&message), 0, true).await?;
+            update_status(&client, &node, "Failed", Some(message.clone()), 0, true).await?;
             return Err(Error::ValidationError(message));
         }
 
@@ -881,7 +871,7 @@ pub(crate) fn apply_stellar_node(
                 &msg,
             )
             .await?;
-            update_status(&client, &node, "Failed", Some(&msg), 0, true).await?;
+            update_status(&client, &node, "Failed", Some(msg.clone()), 0, true).await?;
             return Err(e);
         }
 
@@ -900,7 +890,7 @@ pub(crate) fn apply_stellar_node(
             &ctx,
             &node,
             ActionType::Update,
-            "PVC and ConfigMap", clones: [propagated_labels], clones: [propagated_labels], move |client: Client, ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
+            "PVC and ConfigMap", clones: [propagated_labels], move |client: Client, ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
                 resources::ensure_pvc(&client, &node, &propagated_labels, ctx.dry_run).await?;
                 resources::ensure_config_map(&client, &node, None, ctx.enable_mtls, ctx.dry_run)
                     .await?;
@@ -910,7 +900,7 @@ pub(crate) fn apply_stellar_node(
         .await?;
 
         // 1a. Managed Database (CloudNativePG)
-        apply_or_emit!(&ctx, &node, ActionType::Update, "Managed Database", move |)client: Client, ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
+        apply_or_emit!(&ctx, &node, ActionType::Update, "Managed Database", move |client: Client, ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
             resources::ensure_cnpg_cluster(&client, &node, ctx.dry_run).await?;
             resources::ensure_cnpg_pooler(&client, &node, ctx.dry_run).await?;
             Ok(())
@@ -919,7 +909,7 @@ pub(crate) fn apply_stellar_node(
 
         // 2. Handle suspension
         if node.spec.suspended {
-            apply_or_emit!(&ctx, &node, ActionType::Update, "Suspended state resources", clones: [propagated_labels], clones: [propagated_labels], move |client: Client, ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
+            apply_or_emit!(&ctx, &node, ActionType::Update, "Suspended state resources", clones: [propagated_labels], move |client: Client, ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
                     resources::ensure_pvc(&client, &node, &propagated_labels, ctx.dry_run).await?;
                     resources::ensure_config_map(&client, &node, None, ctx.enable_mtls, ctx.dry_run)
                         .await?;
@@ -934,7 +924,7 @@ pub(crate) fn apply_stellar_node(
                             )
                             .await?;
                         }
-                        NodeType::Horizon |) NodeType::SorobanRpc => {
+                        NodeType::Horizon | NodeType::SorobanRpc => {
                             resources::ensure_deployment(&client, &node, ctx.enable_mtls,
                                 &propagated_labels,
                                 ctx.dry_run,
@@ -953,12 +943,12 @@ pub(crate) fn apply_stellar_node(
             )
             .await?;
 
-            apply_or_emit!(&ctx, &node, ActionType::Update, "Status (Maintenance)", clones: [propagated_labels], clones: [propagated_labels], move |client: Client, ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
+            apply_or_emit!(&ctx, &node, ActionType::Update, "Status (Maintenance)", clones: [propagated_labels], move |client: Client, ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
                     update_status(
                         &client,
                         &node,
                         "Maintenance",
-                        Some("Manual maintenance mode active; workload management paused"),
+                        Some("Manual maintenance mode active; workload management paused".to_string()),
                         0,
                         true,
                     )
@@ -980,7 +970,7 @@ pub(crate) fn apply_stellar_node(
                 &client,
                 &node,
                 "Suspended",
-                Some("Node is suspended"),
+                Some("Node is suspended".to_string()),
                 0,
                 true,
             )
@@ -1220,7 +1210,7 @@ pub(crate) fn apply_stellar_node(
                 &client,
                 &node,
                 "DR_Active",
-                Some("Disaster recovery mode active"),
+                Some("Disaster recovery mode active".to_string()),
                 0,
                 true,
             )
@@ -1230,7 +1220,7 @@ pub(crate) fn apply_stellar_node(
         .await?;
 
         // 1. Create/update the PersistentVolumeClaim
-        apply_or_emit!(&ctx, &node, ActionType::Create, "PVC", move |client: Client, ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
+        apply_or_emit!(&ctx, &node, ActionType::Create, "PVC", clones: [propagated_labels], move |client: Client, ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
             resources::ensure_pvc(&client, &node, &propagated_labels, ctx.dry_run).await?;
             Ok(())
         })
@@ -1273,7 +1263,7 @@ pub(crate) fn apply_stellar_node(
             ActionType::Update,
             "ConfigMap",
             clones: [quorum_override],
-            move |)client: Client, ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
+            move |client: Client, ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
                 resources::ensure_config_map(&client, &node, (*quorum_override).clone(),
                     ctx.enable_mtls,
                     ctx.dry_run,
@@ -1291,7 +1281,7 @@ pub(crate) fn apply_stellar_node(
                 &client,
                 &node,
                 "Maintenance",
-                Some("Manual maintenance mode active; workload management paused"),
+                Some("Manual maintenance mode active; workload management paused".to_string()),
                 0,
                 true,
             )
@@ -1301,7 +1291,7 @@ pub(crate) fn apply_stellar_node(
 
         if node.spec.suspended {
             info!("Node {}/{} is suspended, scaling to 0", namespace, name);
-            apply_or_emit!(&ctx, &node, ActionType::Update, "Status (Suspended)", clones: [propagated_labels], clones: [propagated_labels], move |client: Client, ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
+            apply_or_emit!(&ctx, &node, ActionType::Update, "Status (Suspended)", clones: [propagated_labels], move |client: Client, ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
                     update_suspended_status(&client, &node).await?;
                     Ok(())
                 }
@@ -1316,6 +1306,7 @@ pub(crate) fn apply_stellar_node(
             &node,
             ActionType::Update,
             "mTLS certificates",
+            clones: [namespace],
             move |client: Client, ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
                 mtls::ensure_ca(&client, &namespace).await?;
                 mtls::ensure_node_cert(&client, &node).await?;
@@ -1339,6 +1330,7 @@ pub(crate) fn apply_stellar_node(
             &node,
             ActionType::Update,
             "Workload (Deployment/StatefulSet)",
+            clones: [propagated_labels, namespace, name],
             move |client: Client, ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
                 match node.spec.node_type {
                     NodeType::Validator => {
@@ -1376,7 +1368,7 @@ pub(crate) fn apply_stellar_node(
                         .await?;
                         super::forensic_snapshot::reconcile_forensic_snapshot(&client, &node).await?;
                     }
-                    NodeType::Horizon |) NodeType::SorobanRpc => {
+                    NodeType::Horizon | NodeType::SorobanRpc => {
                         resources::ensure_deployment(&client, &node, ctx.enable_mtls,
                             &propagated_labels,
                             ctx.dry_run,
@@ -1895,7 +1887,7 @@ pub(crate) fn apply_stellar_node(
         if node.spec.node_type == NodeType::Validator {
             if let Some(pruning_policy) = &node.spec.pruning_policy {
                 if pruning_policy.enabled {
-                    apply_or_emit!(&ctx, &node, ActionType::Update, "Archive Pruning", move |client: Client, ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
+                    apply_or_emit!(&ctx, &node, ActionType::Update, "Archive Pruning", clones: [namespace, name], move |client: Client, ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
                         match super::pruning_reconciler::reconcile_pruning(&client, &node).await {
                             Ok(Some(result)) => {
                                 info!(
@@ -2181,11 +2173,11 @@ pub(crate) fn apply_stellar_node(
             ("Ready", "Node is healthy and synced".to_string())
         };
 
-        apply_or_emit!(&ctx, &node, ActionType::Update, "Status (Final)", move |client: Client, ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
-            update_status_with_health(&client, &node, phase, Some(&message), &health_result).await?;
+        apply_or_emit!(&ctx, &node, ActionType::Update, "Status (Final)", clones: [health_result, message], move |client: Client, ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
+            update_status_with_health(&client, &node, phase, Some(message.clone()), health_result.clone()).await?;
 
             let ready_replicas = get_ready_replicas(&client, &node).await.unwrap_or(0);
-            update_status(&client, &node, phase, Some(&message), ready_replicas, true).await?;
+            update_status(&client, &node, phase, Some(message), ready_replicas, true).await?;
             Ok(())
         })
         .await?;
@@ -2993,7 +2985,7 @@ async fn update_status(
     client: &Client,
     node: &StellarNode,
     phase: &str,
-    message: Option<&str>,
+    message: Option<String>,
     ready_replicas: i32,
     update_obs_gen: bool,
 ) -> Result<()> {
@@ -3015,7 +3007,7 @@ async fn update_status(
         .map(|s| s.conditions.clone())
         .unwrap_or_default();
 
-    apply_phase_conditions(&mut conditions, phase, message);
+    apply_phase_conditions(&mut conditions, phase, message.as_deref());
 
     // Set observed generation on all conditions
     if let Some(gen) = observed_generation {
@@ -3251,8 +3243,8 @@ async fn update_status_with_health(
     client: &Client,
     node: &StellarNode,
     _phase: &str,
-    message: Option<&str>,
-    health: &health::HealthCheckResult,
+    message: Option<String>,
+    health: health::HealthCheckResult,
 ) -> Result<()> {
     let namespace = node.namespace().unwrap_or_else(|| "default".to_string());
     let api: Api<StellarNode> = Api::namespaced(client.clone(), &namespace);
@@ -3323,7 +3315,7 @@ async fn update_status_with_health(
     }
 
     let status = StellarNodeStatus {
-        message: message.map(String::from),
+        message,
         observed_generation: node.metadata.generation,
         replicas: if node.spec.suspended {
             0
