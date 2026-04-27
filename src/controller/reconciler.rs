@@ -2799,7 +2799,7 @@ async fn check_canary_health(
         .map(|c| c.max_error_rate)
         .unwrap_or(0.05);
 
-    match measure_canary_error_rate(&client, &node, &namespace).await {
+    match measure_canary_error_rate(client, node, &namespace).await {
         Ok(error_rate) => {
             if error_rate > max_error_rate {
                 return Ok(health::HealthCheckResult::unhealthy(format!(
@@ -3229,7 +3229,7 @@ async fn run_archive_integrity_check(
 
     // Update Prometheus metric with the maximum observed lag.
     #[cfg(feature = "metrics")]
-    let hardware_generation = hardware_generation_for_metrics(&client, &node).await;
+    let hardware_generation = hardware_generation_for_metrics(client, node).await;
     #[cfg(feature = "metrics")]
     metrics::set_archive_ledger_lag(
         &namespace,
@@ -3586,7 +3586,7 @@ async fn run_archive_checkpoint_verification(
     {
         let node_type = format!("{:?}", node.spec.node_type);
         let network = format!("{:?}", node.spec.network);
-        let hardware = hardware_generation_for_metrics(&client, &node).await;
+        let hardware = hardware_generation_for_metrics(client, node).await;
         metrics::set_archive_integrity_status(
             &namespace,
             &name,
@@ -3879,7 +3879,7 @@ async fn perform_quorum_analysis(
     #[cfg(feature = "metrics")]
     {
         let node_type = node.spec.node_type.to_string();
-        let hardware_generation = hardware_generation_for_metrics(&client, &node).await;
+        let hardware_generation = hardware_generation_for_metrics(client, node).await;
         let network = match &node.spec.network {
             crate::crd::StellarNetwork::Mainnet => "mainnet",
             crate::crd::StellarNetwork::Testnet => "testnet",
@@ -3915,7 +3915,7 @@ async fn perform_quorum_analysis(
 
     // Update status
     analyzer
-        .update_node_status(&client, &node, &result)
+        .update_node_status(client, node, &result)
         .await
         .map_err(|e| Error::ConfigError(format!("Failed to update status: {e}")))?;
 
@@ -3933,7 +3933,7 @@ async fn perform_quorum_analysis(
 
 #[cfg(feature = "metrics")]
 async fn hardware_generation_for_metrics(client: &Client, node: &StellarNode) -> String {
-    match infra::resolve_stellar_node_infra(&client, &node).await {
+    match infra::resolve_stellar_node_infra(client, node).await {
         Ok(summary) => summary.hardware_generation_label(),
         Err(err) => {
             warn!(

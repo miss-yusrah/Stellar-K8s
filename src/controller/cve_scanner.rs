@@ -367,12 +367,8 @@ async fn emit_cve_event(client: &Client, pod: &Pod, image: &str, counts: &CVECou
         },
         action: Some("CVEScan".to_string()),
         event_time: None,
-        first_timestamp: Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(
-            now.into(),
-        )),
-        last_timestamp: Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(
-            now.into(),
-        )),
+        first_timestamp: Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(now)),
+        last_timestamp: Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(now)),
         involved_object: ObjectReference {
             api_version: Some("v1".to_string()),
             kind: Some("Pod".to_string()),

@@ -1170,6 +1170,83 @@ pub fn set_zk_archive_chain_gaps(
         .set(gap_count as i64);
 }
 
+/// Set PVC disk usage percentage metric
+pub fn set_pvc_disk_usage_percent(
+    namespace: &str,
+    name: &str,
+    node_type: &str,
+    network: &str,
+    hardware_generation: &str,
+    usage_percent: i64,
+) {
+    let labels = NodeLabels {
+        namespace: namespace.to_string(),
+        name: name.to_string(),
+        node_type: node_type.to_string(),
+        network: network.to_string(),
+        hardware_generation: hardware_generation.to_string(),
+    };
+    PVC_DISK_USAGE_PERCENT
+        .get_or_create(&labels)
+        .set(usage_percent);
+}
+
+/// Increment PVC expansion counter
+pub fn increment_pvc_expansion_total(
+    namespace: &str,
+    name: &str,
+    node_type: &str,
+    network: &str,
+    hardware_generation: &str,
+) {
+    let labels = NodeLabels {
+        namespace: namespace.to_string(),
+        name: name.to_string(),
+        node_type: node_type.to_string(),
+        network: network.to_string(),
+        hardware_generation: hardware_generation.to_string(),
+    };
+    PVC_EXPANSION_TOTAL.get_or_create(&labels).inc();
+}
+
+/// Set PVC size in bytes metric
+pub fn set_pvc_size_bytes(
+    namespace: &str,
+    name: &str,
+    node_type: &str,
+    network: &str,
+    hardware_generation: &str,
+    size_bytes: i64,
+) {
+    let labels = NodeLabels {
+        namespace: namespace.to_string(),
+        name: name.to_string(),
+        node_type: node_type.to_string(),
+        network: network.to_string(),
+        hardware_generation: hardware_generation.to_string(),
+    };
+    PVC_SIZE_BYTES.get_or_create(&labels).set(size_bytes);
+}
+
+/// Set PVC expansion count metric
+pub fn set_pvc_expansion_count(
+    namespace: &str,
+    name: &str,
+    node_type: &str,
+    network: &str,
+    hardware_generation: &str,
+    count: i64,
+) {
+    let labels = NodeLabels {
+        namespace: namespace.to_string(),
+        name: name.to_string(),
+        node_type: node_type.to_string(),
+        network: network.to_string(),
+        hardware_generation: hardware_generation.to_string(),
+    };
+    PVC_EXPANSION_COUNT.get_or_create(&labels).set(count);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1380,81 +1457,4 @@ mod tests {
         inc_operator_reconcile_error("stellarnode", "unknown");
         // Function should not panic with various error kinds
     }
-}
-
-/// Set PVC disk usage percentage metric
-pub fn set_pvc_disk_usage_percent(
-    namespace: &str,
-    name: &str,
-    node_type: &str,
-    network: &str,
-    hardware_generation: &str,
-    usage_percent: i64,
-) {
-    let labels = NodeLabels {
-        namespace: namespace.to_string(),
-        name: name.to_string(),
-        node_type: node_type.to_string(),
-        network: network.to_string(),
-        hardware_generation: hardware_generation.to_string(),
-    };
-    PVC_DISK_USAGE_PERCENT
-        .get_or_create(&labels)
-        .set(usage_percent);
-}
-
-/// Increment PVC expansion counter
-pub fn increment_pvc_expansion_total(
-    namespace: &str,
-    name: &str,
-    node_type: &str,
-    network: &str,
-    hardware_generation: &str,
-) {
-    let labels = NodeLabels {
-        namespace: namespace.to_string(),
-        name: name.to_string(),
-        node_type: node_type.to_string(),
-        network: network.to_string(),
-        hardware_generation: hardware_generation.to_string(),
-    };
-    PVC_EXPANSION_TOTAL.get_or_create(&labels).inc();
-}
-
-/// Set PVC size in bytes metric
-pub fn set_pvc_size_bytes(
-    namespace: &str,
-    name: &str,
-    node_type: &str,
-    network: &str,
-    hardware_generation: &str,
-    size_bytes: i64,
-) {
-    let labels = NodeLabels {
-        namespace: namespace.to_string(),
-        name: name.to_string(),
-        node_type: node_type.to_string(),
-        network: network.to_string(),
-        hardware_generation: hardware_generation.to_string(),
-    };
-    PVC_SIZE_BYTES.get_or_create(&labels).set(size_bytes);
-}
-
-/// Set PVC expansion count metric
-pub fn set_pvc_expansion_count(
-    namespace: &str,
-    name: &str,
-    node_type: &str,
-    network: &str,
-    hardware_generation: &str,
-    count: i64,
-) {
-    let labels = NodeLabels {
-        namespace: namespace.to_string(),
-        name: name.to_string(),
-        node_type: node_type.to_string(),
-        network: network.to_string(),
-        hardware_generation: hardware_generation.to_string(),
-    };
-    PVC_EXPANSION_COUNT.get_or_create(&labels).set(count);
 }

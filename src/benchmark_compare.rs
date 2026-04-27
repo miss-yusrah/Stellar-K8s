@@ -227,8 +227,7 @@ impl PrometheusClient {
             for value in values {
                 if let (Some(timestamp), Some(val_str)) = (value[0].as_i64(), value[1].as_str()) {
                     if let Ok(val) = val_str.parse::<f64>() {
-                        let dt =
-                            DateTime::from_timestamp(timestamp, 0).unwrap_or_else(|| Utc::now());
+                        let dt = DateTime::from_timestamp(timestamp, 0).unwrap_or_else(Utc::now);
                         results.push((dt, val));
                     }
                 }

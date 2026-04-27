@@ -472,7 +472,7 @@ async fn run_leader_election(
     let leases: Api<Lease> = Api::namespaced(client, namespace);
 
     loop {
-        match try_acquire_or_renew(&leases, &namespace, identity).await {
+        match try_acquire_or_renew(&leases, namespace, identity).await {
             Ok(true) => {
                 if !is_leader.load(Ordering::Relaxed) {
                     info!("Acquired leadership: {}", LEASE_NAME);

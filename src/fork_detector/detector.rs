@@ -138,7 +138,7 @@ async fn run_detection_cycle(
     };
 
     // Divergence = majority of responding anchors disagree with local hash.
-    let divergence_detected = responding_count > 0 && agreeing < (responding_count + 1) / 2;
+    let divergence_detected = responding_count > 0 && agreeing < responding_count.div_ceil(2);
 
     Ok(ForkCheckResult {
         local_sequence,

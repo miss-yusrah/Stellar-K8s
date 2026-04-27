@@ -329,13 +329,13 @@ pub(crate) fn format_bytes_to_quantity(bytes: u64) -> String {
     const GI: u64 = 1024 * 1024 * 1024;
     const TI: u64 = 1024 * 1024 * 1024 * 1024;
 
-    if bytes >= TI && bytes % TI == 0 {
+    if bytes >= TI && bytes.is_multiple_of(TI) {
         format!("{}Ti", bytes / TI)
-    } else if bytes >= GI && bytes % GI == 0 {
+    } else if bytes >= GI && bytes.is_multiple_of(GI) {
         format!("{}Gi", bytes / GI)
     } else {
         // Round up to nearest Gi
-        format!("{}Gi", (bytes + GI - 1) / GI)
+        format!("{}Gi", bytes.div_ceil(GI))
     }
 }
 
