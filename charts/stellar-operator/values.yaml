@@ -206,14 +206,13 @@ featureFlags:
   enablePeerDiscovery: true
   enableArchiveHealth: true
   enableSorobanMetrics: false
-  enableArchiveHealth: "false"
 
 
 security:
   audit:
     enabled: true
-    logLevel: "Audit"
-  podSecurityStandard: "restricted"
+    logLevel: Audit
+  podSecurityStandard: restricted
   falco:
     enabled: true
   networkPolicy:
