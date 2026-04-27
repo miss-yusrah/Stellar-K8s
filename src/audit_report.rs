@@ -1,7 +1,5 @@
 use aws_sdk_s3::Client as S3Client;
 use comfy_table::Table;
-use serde_json::Value;
-use tracing::error;
 
 use stellar_k8s::controller::audit_log::AuditEntry;
 use stellar_k8s::error::{Error, Result};

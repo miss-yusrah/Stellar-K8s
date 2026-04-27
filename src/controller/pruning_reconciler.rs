@@ -196,7 +196,7 @@ async fn process_archive(
 pub async fn update_pruning_status(
     client: &kube::client::Client,
     node: &StellarNode,
-    result: &PruneResult,
+    result: PruneResult,
 ) -> Result<()> {
     use kube::api::{Api, Patch, PatchParams};
     use kube::ResourceExt;

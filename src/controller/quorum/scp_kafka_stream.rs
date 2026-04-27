@@ -44,7 +44,7 @@
 //! - Sample topological health consumer
 
 use super::error::{QuorumAnalysisError, Result};
-use super::types::{BallotState, NominationState, QuorumSetInfo, ScpState};
+use super::types::{QuorumSetInfo, ScpState};
 use chrono::{DateTime, Utc};
 use rdkafka::config::ClientConfig;
 use rdkafka::producer::{FutureProducer, FutureRecord, Producer};
@@ -460,6 +460,7 @@ impl ScpStreamingSidecar {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::types::{BallotState, NominationState};
 
     #[test]
     fn test_scp_kafka_config_defaults() {

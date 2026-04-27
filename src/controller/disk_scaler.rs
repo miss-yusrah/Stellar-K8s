@@ -308,7 +308,7 @@ pub(crate) fn parse_quantity_to_bytes(quantity: &str) -> Result<u64> {
         .parse()
         .map_err(|_| Error::ValidationError(format!("Invalid quantity format: {}", quantity)))?;
 
-    let multiplier = match unit {
+    let multiplier: u64 = match unit {
         "" => 1,
         "Ki" => 1024,
         "Mi" => 1024 * 1024,
