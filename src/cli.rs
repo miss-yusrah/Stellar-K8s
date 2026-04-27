@@ -77,6 +77,8 @@ pub enum Commands {
     },
     /// Generate an incident report for a specific time window
     IncidentReport(incident::IncidentReportArgs),
+    /// Compare performance metrics between two clusters
+    BenchmarkCompare(stellar_k8s::benchmark_compare::BenchmarkCompareArgs),
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]

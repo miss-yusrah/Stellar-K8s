@@ -57,6 +57,11 @@ async fn main() -> Result<(), Error> {
             return run_benchmark_controller_cmd(benchmark_args).await
         }
         Commands::Simulator(cli) => return run_simulator(cli).await,
+        Commands::BenchmarkCompare(compare_args) => {
+            return stellar_k8s::benchmark_compare::run_benchmark_compare(compare_args)
+                .await
+                .map_err(|e| Error::ConfigError(e.to_string()));
+        }
     };
 
     version_check::check_and_notify(offline).await;

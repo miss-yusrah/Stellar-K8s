@@ -1,7 +1,5 @@
 use aws_sdk_s3::Client as S3Client;
 use comfy_table::Table;
-use serde_json::Value;
-use tracing::error;
 
 use stellar_k8s::controller::audit_log::AuditEntry;
 use stellar_k8s::error::{Error, Result};
@@ -72,9 +70,8 @@ impl AuditReporter {
                     if let Ok(entry) = serde_json::from_slice::<AuditEntry>(&body.into_bytes()) {
                         let matches_resource = resource_filter
                             .as_ref()
-                            .map_or(true, |r| entry.resource.contains(r));
-                        let matches_actor =
-                            actor_filter.as_ref().map_or(true, |a| entry.actor == *a);
+                            .is_none_or(|r| entry.resource.contains(r));
+                        let matches_actor = actor_filter.as_ref().is_none_or(|a| entry.actor == *a);
 
                         if matches_resource && matches_actor {
                             entries.push(entry);

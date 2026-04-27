@@ -19,6 +19,9 @@ Designed for high availability, type safety, and minimal footprint.
 - **🦀 Rust-Native Performance**: Built with `kube-rs` and `Tokio` for an ultra-lightweight footprint (~15MB binary) and complete memory safety.
 - **🛡️ Enterprise Reliability**: Type-safe error handling prevents runtime failures. Built-in `Finalizers` ensure clean PVC and resource cleanup.
 - **🏥 Auto-Sync Health Checks**: Automatically monitors Horizon and Soroban RPC nodes, only marking them Ready when fully synced with the network.
+- **💾 Proactive Disk Scaling**: Automatically expands EBS/GCP volumes as the ledger grows, preventing 'Disk Full' outages without manual intervention.
+- **📊 Real-time SCP Analytics**: High-throughput streaming of SCP messages to Kafka for network topology analysis and quorum health monitoring.
+- **📈 Multi-Cluster Comparison**: CLI tool for comparing performance metrics (TPS, Ledger Time) between clusters in real-time with HTML/JSON reports.
 - **GitOps Ready**: Fully compatible with ArgoCD and Flux for declarative infrastructure management.
 - **📈 Observable by Default**: Native Prometheus metrics integration for monitoring node health, ledger sync status, and resource usage.
 - **⚡ Soroban Ready**: First-class support for Soroban RPC nodes with captive core configuration.
