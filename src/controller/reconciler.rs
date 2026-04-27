@@ -1866,7 +1866,7 @@ pub(crate) fn apply_stellar_node(
                     ActionType::Update,
                     "Sync-state resource scaling",
                     move |client: Client, _ctx: Arc<ControllerState>, node: Arc<StellarNode>| async move {
-                        sync_scale::reconcile_sync_scaling(&client, &node, &scaling_config_clone, &sync_state)
+                        sync_scale::reconcile_sync_scaling(&client, &node, &scaling_config, &sync_state)
                             .await?;
                         Ok(())
                     }

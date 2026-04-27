@@ -529,7 +529,7 @@ pub async fn execute_prune(
 
     let final_errors = errors.lock().await.clone();
 
-    let deleted_count = deletable_count - final_errors.len();
+    let deleted_count = deleted_ledgers.len() - final_errors.len();
 
     info!(
         "Pruning complete: {} deleted, {} errors",
@@ -539,7 +539,7 @@ pub async fn execute_prune(
 
     Ok(PruneResult {
         total_checkpoints: 0, // Will be set by caller
-        eligible_for_deletion: deletable_count,
+        eligible_for_deletion: deleted_ledgers.len(),
         deleted_count,
         retained_count: 0, // Will be set by caller
         bytes_freed: total_bytes,
