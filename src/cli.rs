@@ -616,3 +616,7 @@ mod cli_tests {
         assert!(parsed.offline);
     }
 }
+
+#[cfg(test)]
+#[path = "cli_tests.rs"]
+mod cli_tests_ext;
