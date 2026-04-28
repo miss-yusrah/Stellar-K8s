@@ -48,6 +48,8 @@ Stellar-K8s follows the **Operator Pattern**, extending Kubernetes with a `Stell
   - CI/CD and Docker builds use Rust 1.93 for consistency
   - Contributors can use any Rust 1.88+ version locally
 
+> **New to Stellar-K8s?** See the [Glossary](docs/glossary.md) for definitions of common terms like [Validator](docs/glossary.md#validator), [Horizon](docs/glossary.md#horizon), [SCP](docs/glossary.md#scp-stellar-consensus-protocol), and [Reconciliation](docs/glossary.md#reconciliation).
+
 ---
 
 ## 🚀 Quick Start

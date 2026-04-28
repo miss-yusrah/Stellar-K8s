@@ -138,5 +138,9 @@ After running the script, follow the manual steps printed at the end (Docker Des
 - **Security**: All dependencies must be audited. We resolve all `RUSTSEC` advisories immediately.
 - **Error Handling**: Prefer the `Result<T>` type defined in `src/error.rs` using `thiserror`.
 
+## Glossary
+
+New to Stellar-K8s? Check out the [Glossary](docs/glossary.md) for definitions of common terms like [Validator](docs/glossary.md#validator), [Reconciliation](docs/glossary.md#reconciliation), [SCP](docs/glossary.md#scp-stellar-consensus-protocol), and [Horizon](docs/glossary.md#horizon).
+
 ## Need Help?
 If you're stuck, feel free to open a Draft PR or reach out in the repository's discussions/issues!
