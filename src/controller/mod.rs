@@ -69,8 +69,10 @@ pub(crate) mod archive_health;
 pub mod archive_prune;
 pub mod audit;
 pub mod audit_log;
+pub mod audit_recorder;
 pub mod audit_sink;
 pub mod audit_worker;
+pub mod anomaly_detection;
 pub mod compliance_export;
 pub mod background_jobs;
 pub mod captive_core;
@@ -141,6 +143,8 @@ pub use archive_health::{
     ArchiveIntegrityResult, ARCHIVE_LAG_THRESHOLD,
 };
 pub use audit_log::{AdminAction, AuditEntry, AuditLog};
+pub use audit_recorder::AuditRecorder;
+pub use anomaly_detection::{run_anomaly_detection, AnomalyDetector, AnomalyEvent};
 pub use background_jobs::{JobKind, JobRecord, JobRegistry, JobState, MAX_JOBS};
 pub use benchmark::run_benchmark_controller;
 pub use blue_green::{

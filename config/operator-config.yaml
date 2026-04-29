@@ -84,3 +84,23 @@ diskScaling:
   # Safety limit to prevent runaway costs
   # Default: 10
   maxExpansions: 10
+
+# ML-based anomaly detection for operator behavioral patterns
+anomalyDetection:
+  # Enable anomaly detection
+  enabled: true
+
+  # Interval between detection runs (seconds)
+  intervalSeconds: 30
+
+  # Rolling window size for action counts (seconds)
+  windowSeconds: 300
+
+  # Z-score threshold to flag anomalies
+  zscoreThreshold: 3.0
+
+  # EWMA smoothing factor (0-1)
+  ewmaAlpha: 0.25
+
+  # Max anomalies retained in memory
+  maxAnomalies: 500

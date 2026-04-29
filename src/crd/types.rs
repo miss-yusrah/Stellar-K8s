@@ -1641,14 +1641,38 @@ pub struct PeeringConfig {
 #[serde(rename_all = "camelCase")]
 pub struct DisasterRecoveryStatus {
     pub current_role: Option<DRRole>,
+    /// Active peer cluster (primary or standby target)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_peer_cluster_id: Option<String>,
     pub peer_health: Option<String>,
+    /// Per-peer health status for multi-region DR
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peer_health_map: Option<Vec<DRPeerHealth>>,
     pub last_peer_contact: Option<String>,
     pub sync_lag: Option<u64>,
     pub failover_active: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_failover_time: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_failover_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_check_time: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub last_drill_time: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_drill_result: Option<DRDrillResult>,
+}
+
+/// Health status for a DR peer cluster.
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DRPeerHealth {
+    pub cluster_id: String,
+    pub health: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_contact: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub priority: Option<u32>,
 }
 
 /// Configuration for automated DR drill scheduling
@@ -1799,6 +1823,9 @@ pub struct CrossClusterConfig {
     pub service_mesh: Option<CrossClusterServiceMeshConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub external_name: Option<ExternalNameConfig>,
+    /// Federation configuration for CRD synchronization
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub federation: Option<FederationConfig>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub peer_clusters: Vec<PeerClusterConfig>,
     #[serde(default = "default_latency_threshold")]
@@ -1820,12 +1847,27 @@ impl Default for CrossClusterConfig {
             mode: CrossClusterMode::default(),
             service_mesh: None,
             external_name: None,
+            federation: None,
             peer_clusters: Vec::new(),
             latency_threshold_ms: default_latency_threshold(),
             auto_discovery: false,
             health_check: None,
         }
     }
+}
+
+/// Federation configuration for cross-cluster CRD synchronization
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct FederationConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_true")]
+    pub sync_crds: bool,
+    #[serde(default = "default_true")]
+    pub sync_stellarnodes: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_namespace: Option<String>,
 }
 
 /// Cross-cluster networking mode
@@ -1917,6 +1959,19 @@ pub struct PeerClusterConfig {
     pub port: Option<u16>,
     #[serde(default = "default_true")]
     pub enabled: bool,
+    /// Secret containing kubeconfig for federation sync
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kubeconfig_secret_ref: Option<String>,
+    /// Key in the kubeconfig secret data (default: "kubeconfig")
+    #[serde(default = "default_kubeconfig_key")]
+    pub kubeconfig_secret_key: String,
+    /// Optional namespace override for federated resources
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_namespace: Option<String>,
+}
+
+fn default_kubeconfig_key() -> String {
+    "kubeconfig".to_string()
 }
 
 fn default_peer_priority() -> u32 {
@@ -2802,4 +2857,120 @@ pub struct GasAutoscalingConfig {
     /// Polling interval in seconds (default: 6, matching average ledger close time).
     #[serde(default = "default_poll_interval_seconds")]
     pub poll_interval_seconds: u32,
+}
+
+// =============================================================================
+// RBAC, Audit Logging, and Policy Configuration
+// =============================================================================
+
+/// Fine-grained operator roles for RBAC
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "PascalCase")]
+pub enum OperatorRole {
+    /// Full access to all resources and actions
+    SuperAdmin,
+    /// Can perform operational tasks but not modify security settings
+    Operator,
+    /// Read-only access to audit logs and system status
+    Auditor,
+    /// Read-only access to system status
+    Viewer,
+}
+
+/// RBAC configuration for operator-level permissions
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RbacConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    /// Map of Kubernetes subjects (users/groups/SAs) to Operator roles
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub role_bindings: Vec<RoleBinding>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RoleBinding {
+    /// Kind of the subject: "User", "Group", or "ServiceAccount"
+    pub subject_kind: String,
+    /// Name of the subject
+    pub subject_name: String,
+    /// Role assigned to this subject
+    pub role: OperatorRole,
+}
+
+/// Audit logging configuration
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AuditConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    /// Where to send audit logs
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sinks: Vec<AuditSinkConfig>,
+    /// Retention policy for audit logs
+    #[serde(default)]
+    pub retention: AuditRetentionPolicy,
+    /// Field-level encryption for sensitive data
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encryption: Option<FieldLevelEncryptionConfig>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AuditSinkConfig {
+    #[serde(rename = "type")]
+    pub type_: AuditSinkType,
+    /// Optional endpoint for the sink (e.g. S3 URL, Database DSN)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub endpoint: Option<String>,
+    /// Optional credentials for the sink
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub credentials_secret_ref: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+pub enum AuditSinkType {
+    Stdout,
+    File,
+    Database,
+    ExternalAggregator,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AuditRetentionPolicy {
+    /// Maximum age of audit logs in days
+    pub max_age_days: u32,
+    /// Maximum size of audit logs in MB before rotation
+    pub max_size_mb: u32,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FieldLevelEncryptionConfig {
+    pub enabled: bool,
+    /// Reference to a KMS key for encryption
+    pub kms_key_ref: String,
+}
+
+/// Policy-based authorization (OPA/Gatekeeper)
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PolicyConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    /// Open Policy Agent (OPA) configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opa: Option<OPAConfig>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct OPAConfig {
+    /// OPA server endpoint
+    pub endpoint: String,
+    /// If true, allows the action if OPA is unreachable
+    #[serde(default)]
+    pub fail_open: bool,
 }

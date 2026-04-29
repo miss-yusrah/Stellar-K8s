@@ -115,7 +115,7 @@ pub async fn watch_feature_flags(
     client: Client,
     namespace: String,
     flags: SharedFeatureFlags,
-    audit_sink: Option<Arc<dyn crate::controller::audit_sink::AuditSink>>,
+    audit_recorder: Option<Arc<crate::controller::audit_recorder::AuditRecorder>>,
 ) {
     let api: Api<ConfigMap> = Api::namespaced(client, &namespace);
 
@@ -140,7 +140,7 @@ pub async fn watch_feature_flags(
                 if *current != new_flags {
                     log_flag_changes(&current, &new_flags, cm.name_any().as_str());
 
-                    if let Some(sink) = &audit_sink {
+                    if let Some(recorder) = &audit_recorder {
                         use crate::controller::audit_log::{AdminAction, AuditEntry};
                         let actor = extract_actor(&cm);
                         let entry = AuditEntry::new(
@@ -152,7 +152,7 @@ pub async fn watch_feature_flags(
                         )
                         .with_diff(serde_json::to_value(&data).unwrap_or_default());
 
-                        let _ = sink.persist(entry).await;
+                        recorder.record(entry).await;
                     }
 
                     *current = new_flags;
@@ -164,7 +164,7 @@ pub async fn watch_feature_flags(
                     "Feature-flags ConfigMap deleted; reverting to defaults"
                 );
 
-                if let Some(sink) = &audit_sink {
+                if let Some(recorder) = &audit_recorder {
                     use crate::controller::audit_log::{AdminAction, AuditEntry};
                     let actor = extract_actor(&cm);
                     let entry = AuditEntry::new(
@@ -174,7 +174,7 @@ pub async fn watch_feature_flags(
                         namespace.clone(),
                         Some("Feature flags ConfigMap deleted"),
                     );
-                    let _ = sink.persist(entry).await;
+                    recorder.record(entry).await;
                 }
 
                 let mut current = flags.write().await;

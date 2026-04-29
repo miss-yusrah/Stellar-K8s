@@ -12,23 +12,23 @@ use tokio::sync::RwLock;
 use tracing::info;
 
 use crate::controller::audit_log::{AdminAction, AuditEntry};
-use crate::controller::audit_sink::AuditSink;
+use crate::controller::audit_recorder::AuditRecorder;
 use crate::crd::StellarNode;
 use crate::error::Result;
 
 /// Worker that watches for StellarNode changes and emits audit logs.
 pub struct AuditWorker {
     client: Client,
-    sink: Arc<dyn AuditSink>,
+    recorder: Arc<AuditRecorder>,
     /// Cache of resource versions to detect actual changes and avoid redundant audits.
     cache: Arc<RwLock<HashMap<String, Value>>>,
 }
 
 impl AuditWorker {
-    pub fn new(client: Client, sink: Arc<dyn AuditSink>) -> Self {
+    pub fn new(client: Client, recorder: Arc<AuditRecorder>) -> Self {
         Self {
             client,
-            sink,
+            recorder,
             cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
@@ -68,7 +68,7 @@ impl AuditWorker {
                                 )
                                 .with_diff(serde_json::to_value(diff).unwrap_or_default());
 
-                                let _ = self.sink.persist(entry).await;
+                                self.recorder.record(entry).await;
                             }
                         }
                     } else {
@@ -83,7 +83,7 @@ impl AuditWorker {
                         )
                         .with_diff(current_val.clone());
 
-                        let _ = self.sink.persist(entry).await;
+                        self.recorder.record(entry).await;
                     }
                     cache.insert(name, current_val);
                 }
@@ -99,7 +99,7 @@ impl AuditWorker {
                         Some("StellarNode deleted"),
                     );
 
-                    let _ = self.sink.persist(entry).await;
+                    self.recorder.record(entry).await;
                     self.cache.write().await.remove(&name);
                 }
                 watcher::Event::Init | watcher::Event::InitDone => {}

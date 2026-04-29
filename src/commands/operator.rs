@@ -213,6 +213,30 @@ pub async fn run_operator(args: RunArgs) -> Result<(), Error> {
     let operator_config = controller::OperatorConfig::load();
     #[cfg(feature = "rest-api")]
     let oidc_config = operator_config.oidc.clone();
+    let audit_log = Arc::new(controller::AuditLog::new());
+    let audit_sink: Option<Arc<dyn controller::audit_sink::AuditSink>> = if
+        operator_config.audit.enabled
+    {
+        if let Some(s3_config) = &operator_config.audit.s3 {
+            Some(
+                Arc::new(controller::audit_sink::S3AuditSink::new(s3_config.clone()).await)
+                    as Arc<dyn controller::audit_sink::AuditSink>,
+            )
+        } else {
+            Some(Arc::new(controller::audit_sink::NoopAuditSink)
+                as Arc<dyn controller::audit_sink::AuditSink>)
+        }
+    } else {
+        None
+    };
+    let audit_recorder = Arc::new(controller::AuditRecorder::new(
+        audit_log.clone(),
+        audit_sink.clone(),
+    ));
+    let anomaly_detector = Arc::new(controller::AnomalyDetector::new(
+        operator_config.anomaly_detection.clone(),
+    ));
+
     let state = Arc::new(controller::ControllerState {
         client: client.clone(),
         enable_mtls: args.enable_mtls,
@@ -235,6 +259,9 @@ pub async fn run_operator(args: RunArgs) -> Result<(), Error> {
         log_level_expires_at: Arc::new(tokio::sync::Mutex::new(None)),
         last_event_received: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         job_registry: Arc::new(controller::JobRegistry::new()),
+        audit_log: audit_log.clone(),
+        audit_recorder: audit_recorder.clone(),
+        anomaly_detector: anomaly_detector.clone(),
         audit_log: Arc::new(controller::AuditLog::new()),
         plugin_registry: Arc::new(stellar_k8s::plugin_sdk::PluginRegistry::new()),
         #[cfg(feature = "rest-api")]
@@ -263,22 +290,29 @@ pub async fn run_operator(args: RunArgs) -> Result<(), Error> {
         let ff_client = client.clone();
         let ff_namespace = args.namespace.clone();
         let ff_flags = feature_flags.clone();
-        let ff_audit_sink = if state.operator_config.audit.enabled {
-            if let Some(s3_config) = &state.operator_config.audit.s3 {
-                Some(
-                    Arc::new(controller::audit_sink::S3AuditSink::new(s3_config.clone()).await)
-                        as Arc<dyn controller::audit_sink::AuditSink>,
-                )
-            } else {
-                Some(Arc::new(controller::audit_sink::NoopAuditSink)
-                    as Arc<dyn controller::audit_sink::AuditSink>)
-            }
+        let ff_audit_recorder = if state.operator_config.audit.enabled {
+            Some(audit_recorder.clone())
         } else {
             None
         };
 
         tokio::spawn(async move {
-            controller::watch_feature_flags(ff_client, ff_namespace, ff_flags, ff_audit_sink).await;
+            controller::watch_feature_flags(
+                ff_client,
+                ff_namespace,
+                ff_flags,
+                ff_audit_recorder,
+            )
+            .await;
+        });
+    }
+
+    // Start anomaly detection loop
+    {
+        let detector_state = state.clone();
+        let detector = anomaly_detector.clone();
+        tokio::spawn(async move {
+            controller::run_anomaly_detection(detector_state, detector).await;
         });
     }
 

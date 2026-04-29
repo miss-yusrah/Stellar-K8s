@@ -52,6 +52,8 @@ pub mod read_replica;
 pub mod schema_utils;
 pub mod seed_secret;
 pub mod service_mesh;
+pub mod multi_region;
+pub mod federation;
 pub mod stellar_benchmark;
 mod stellar_node;
 pub mod types;
@@ -70,6 +72,13 @@ pub use stellar_benchmark::{
     BenchmarkReportStatus, BenchmarkResourceRequirements, BenchmarkSummary,
     EnvVar as BenchmarkEnvVar, PodResult, ResultStorage, StellarBenchmark, StellarBenchmarkSpec,
     StellarBenchmarkStatus, Toleration as BenchmarkToleration,
+};
+    ClusterConfig, ClusterHealthStatus, FailoverPolicy, MultiRegionConfig, MultiRegionHealthCheck,
+    MultiRegionSpec, MultiRegionStatus, SecretSyncConfig,
+};
+pub use federation::{
+    ClusterRegistry, ClusterRegistrySpec, ConflictResolutionStrategy, FederatedCluster,
+    FederatedPlacement, FederatedStellarNode, FederatedStellarNodeSpec,
 };
 pub use stellar_node::{
     BGPStatus, SnapshotBootstrapStatus, SpecValidationError, StellarNode, StellarNodeSpec,

@@ -10,7 +10,7 @@
 #[cfg(test)]
 mod tests {
     use super::super::reconciler::*;
-    use crate::controller::{AuditLog, JobRegistry};
+    use crate::controller::{AnomalyDetector, AuditLog, AuditRecorder, JobRegistry};
     use crate::crd::{
         CaptiveCoreConfig, Condition, HorizonConfig, ManagedDatabaseConfig, NodeType,
         ResourceRequirements, ResourceSpec, SorobanConfig, StellarNetwork, StellarNode,
@@ -353,6 +353,9 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
         let client = Client::try_default()
             .await
             .unwrap_or_else(|_| panic!("Cannot create test client"));
+        let audit_log = Arc::new(AuditLog::new());
+        let audit_recorder = Arc::new(AuditRecorder::new(audit_log.clone(), None));
+        let anomaly_detector = Arc::new(AnomalyDetector::new(Default::default()));
         let state = Arc::new(ControllerState {
             client: client.clone(),
             enable_mtls: false,
@@ -375,7 +378,9 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
             log_level_expires_at: Arc::new(tokio::sync::Mutex::new(None)),
             last_event_received: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             job_registry: Arc::new(JobRegistry::new()),
-            audit_log: Arc::new(AuditLog::new()),
+            audit_log,
+            audit_recorder,
+            anomaly_detector,
             oidc_config: None,
             #[cfg(feature = "rest-api")]
             metrics_store: Arc::new(StellarMetricsStore::new()),
@@ -400,6 +405,9 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
         let client = Client::try_default()
             .await
             .unwrap_or_else(|_| panic!("Cannot create test client"));
+        let audit_log = Arc::new(AuditLog::new());
+        let audit_recorder = Arc::new(AuditRecorder::new(audit_log.clone(), None));
+        let anomaly_detector = Arc::new(AnomalyDetector::new(Default::default()));
         let state = Arc::new(ControllerState {
             client: client.clone(),
             enable_mtls: false,
@@ -422,7 +430,9 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
             log_level_expires_at: Arc::new(tokio::sync::Mutex::new(None)),
             last_event_received: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             job_registry: Arc::new(JobRegistry::new()),
-            audit_log: Arc::new(AuditLog::new()),
+            audit_log,
+            audit_recorder,
+            anomaly_detector,
             oidc_config: None,
             #[cfg(feature = "rest-api")]
             metrics_store: Arc::new(StellarMetricsStore::new()),
@@ -446,6 +456,9 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
         let client = Client::try_default()
             .await
             .unwrap_or_else(|_| panic!("Cannot create test client"));
+        let audit_log = Arc::new(AuditLog::new());
+        let audit_recorder = Arc::new(AuditRecorder::new(audit_log.clone(), None));
+        let anomaly_detector = Arc::new(AnomalyDetector::new(Default::default()));
         let state = Arc::new(ControllerState {
             client: client.clone(),
             enable_mtls: false,
@@ -468,7 +481,9 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
             log_reload_handle: make_reload_handle(),
             last_event_received: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             job_registry: Arc::new(JobRegistry::new()),
-            audit_log: Arc::new(AuditLog::new()),
+            audit_log,
+            audit_recorder,
+            anomaly_detector,
             oidc_config: None,
             #[cfg(feature = "rest-api")]
             metrics_store: Arc::new(StellarMetricsStore::new()),
@@ -684,6 +699,9 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
         let client = Client::try_default()
             .await
             .unwrap_or_else(|_| panic!("Cannot create test client"));
+        let audit_log = Arc::new(AuditLog::new());
+        let audit_recorder = Arc::new(AuditRecorder::new(audit_log.clone(), None));
+        let anomaly_detector = Arc::new(AnomalyDetector::new(Default::default()));
         let state = ControllerState {
             client: client.clone(),
             enable_mtls: true,
@@ -706,7 +724,9 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
             log_level_expires_at: Arc::new(tokio::sync::Mutex::new(None)),
             last_event_received: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             job_registry: Arc::new(JobRegistry::new()),
-            audit_log: Arc::new(AuditLog::new()),
+            audit_log,
+            audit_recorder,
+            anomaly_detector,
             oidc_config: None,
         };
 
@@ -723,6 +743,9 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
         let client = Client::try_default()
             .await
             .unwrap_or_else(|_| panic!("Cannot create test client"));
+        let audit_log = Arc::new(AuditLog::new());
+        let audit_recorder = Arc::new(AuditRecorder::new(audit_log.clone(), None));
+        let anomaly_detector = Arc::new(AnomalyDetector::new(Default::default()));
 
         let state = ControllerState {
             client,
@@ -746,7 +769,9 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
             log_level_expires_at: Arc::new(tokio::sync::Mutex::new(None)),
             last_event_received: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             job_registry: Arc::new(JobRegistry::new()),
-            audit_log: Arc::new(AuditLog::new()),
+            audit_log,
+            audit_recorder,
+            anomaly_detector,
             oidc_config: None,
         };
 

@@ -83,6 +83,15 @@ struct JwtClaims {
     aud: AudienceClaim,
     /// Expiry (Unix timestamp)
     exp: u64,
+    /// Subject (user identifier)
+    #[serde(default)]
+    sub: Option<String>,
+    /// Preferred username
+    #[serde(default)]
+    preferred_username: Option<String>,
+    /// Email
+    #[serde(default)]
+    email: Option<String>,
     /// Roles claim (name is configurable via `OidcConfig::roles_claim`)
     #[serde(default)]
     roles: Vec<String>,
@@ -131,6 +140,14 @@ fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
 /// acceptable for environments where the network boundary already provides
 /// transport-level security (mTLS).
 pub fn validate_jwt(token: &str, config: &OidcConfig) -> Result<Vec<ApiRole>, String> {
+    let (roles, _subject) = validate_jwt_with_subject(token, config)?;
+    Ok(roles)
+}
+
+pub fn validate_jwt_with_subject(
+    token: &str,
+    config: &OidcConfig,
+) -> Result<(Vec<ApiRole>, String), String> {
     // JWT is three base64url-encoded parts separated by '.'
     let parts: Vec<&str> = token.splitn(3, '.').collect();
     if parts.len() != 3 {
@@ -193,7 +210,13 @@ pub fn validate_jwt(token: &str, config: &OidcConfig) -> Result<Vec<ApiRole>, St
         })
         .collect();
 
-    Ok(roles)
+    let subject = claims
+        .preferred_username
+        .or(claims.email)
+        .or(claims.sub)
+        .unwrap_or_else(|| "oidc:unknown".to_string());
+
+    Ok((roles, subject))
 }
 
 /// OIDC authentication middleware.

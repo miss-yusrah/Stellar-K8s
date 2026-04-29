@@ -34,6 +34,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::RwLock;
+use tokio::sync::broadcast;
 use tracing::debug;
 
 /// Maximum number of audit entries kept in memory.
@@ -188,13 +189,16 @@ impl AuditEntry {
 /// Thread-safe, bounded in-memory audit log.
 pub struct AuditLog {
     entries: RwLock<Vec<AuditEntry>>,
+    broadcaster: broadcast::Sender<AuditEntry>,
 }
 
 impl AuditLog {
     /// Create a new, empty audit log.
     pub fn new() -> Self {
+        let (broadcaster, _rx) = broadcast::channel(MAX_ENTRIES);
         Self {
             entries: RwLock::new(Vec::with_capacity(MAX_ENTRIES)),
+            broadcaster,
         }
     }
 
@@ -212,7 +216,13 @@ impl AuditLog {
         if entries.len() >= MAX_ENTRIES {
             entries.remove(0);
         }
-        entries.push(entry);
+        entries.push(entry.clone());
+        let _ = self.broadcaster.send(entry);
+    }
+
+    /// Subscribe to real-time audit entries.
+    pub fn subscribe(&self) -> broadcast::Receiver<AuditEntry> {
+        self.broadcaster.subscribe()
     }
 
     /// List audit entries, optionally filtering by namespace, resource name,
