@@ -47,6 +47,7 @@ use crate::crd::{
     StellarNodeStatus,
 };
 use crate::error::{Error, Result};
+use crate::plugin_sdk::{HookResult, ReconcileContext};
 #[cfg(feature = "metrics")]
 use crate::infra;
 
@@ -68,6 +69,7 @@ use super::health;
 use super::kms_secret;
 use super::label_propagation::LabelPropagator;
 use super::maintenance;
+use super::spot_drain;
 #[cfg(feature = "metrics")]
 use super::metrics;
 use super::mtls;
@@ -314,11 +316,20 @@ pub struct ControllerState {
     pub audit_recorder: std::sync::Arc<super::audit_recorder::AuditRecorder>,
     /// ML-based anomaly detector for operator behavior.
     pub anomaly_detector: std::sync::Arc<super::anomaly_detection::AnomalyDetector>,
+    /// Plugin registry for custom reconciliation hooks and sidecar injectors.
+    pub plugin_registry: std::sync::Arc<crate::plugin_sdk::PluginRegistry>,
     /// Optional OIDC configuration for JWT-based authentication on the REST API.
     /// When `Some`, the OIDC middleware is active; when `None`, the operator falls
     /// back to Kubernetes RBAC token validation.
     #[cfg(feature = "rest-api")]
     pub oidc_config: Option<crate::rest_api::OidcConfig>,
+    /// Thread-safe cache of Stellar metrics (TPS, queue length, etc.) shared between
+    /// the background [`HorizonMetricsCollector`] and the custom metrics API handlers.
+    ///
+    /// Handlers read from this store to serve `custom.metrics.k8s.io/v1beta2` requests.
+    /// The collector writes to it on each scrape cycle.
+    #[cfg(feature = "rest-api")]
+    pub metrics_store: std::sync::Arc<crate::rest_api::metrics_store::StellarMetricsStore>,
 }
 
 impl ControllerState {
@@ -435,6 +446,41 @@ pub async fn run_controller(state: Arc<ControllerState>) -> Result<()> {
             error!("Node Drain Orchestrator stopped with error: {}", e);
         }
     });
+
+    // Start Spot/Preemptible Drain Handler in the background.
+    // NODE_NAME must be injected via the Downward API (spec.nodeName).
+    if let Ok(node_name) = std::env::var("NODE_NAME") {
+        let spot_handler = Arc::new(spot_drain::SpotDrainHandler::new(
+            client.clone(),
+            state.event_reporter.clone(),
+            node_name,
+        ));
+        tokio::spawn(async move {
+            if let Err(e) = spot_handler.run().await {
+                error!("Spot Drain Handler stopped with error: {}", e);
+            }
+        });
+    } else {
+        info!("NODE_NAME env var not set – Spot Drain Handler disabled");
+    // Start Horizon Metrics Collector in the background
+    #[cfg(feature = "rest-api")]
+    {
+        use super::horizon_metrics_collector::spawn_horizon_metrics_collector;
+        let collector_client = client.clone();
+        let collector_store = state.metrics_store.clone();
+        let collector_watch_ns = state.watch_namespace.clone();
+        tokio::spawn(async move {
+            let _handle = spawn_horizon_metrics_collector(
+                collector_store,
+                30, // poll every 30 seconds
+                collector_client,
+                collector_watch_ns,
+            );
+            if let Err(e) = _handle.await {
+                error!("Horizon Metrics Collector stopped with error: {:?}", e);
+            }
+        });
+    }
 
     // Start Quorum Optimizer in the background
     let quorum_optimizer = Arc::new(super::quorum::QuorumOptimizer::new(
@@ -881,6 +927,19 @@ pub(crate) fn apply_stellar_node(
         }
 
         let propagated_labels = Arc::new(LabelPropagator::new(&node).compute());
+
+        // ── Plugin SDK: pre_reconcile hooks ───────────────────────────────────
+        let plugin_ctx = ReconcileContext::from_node(&node);
+        match ctx.plugin_registry.run_pre_reconcile(&plugin_ctx).await {
+            HookResult::Continue => {}
+            HookResult::Abort(reason) => {
+                warn!(
+                    "Plugin aborted reconciliation for {}/{}: {}",
+                    namespace, name, reason
+                );
+                return Err(Error::ConfigError(format!("plugin aborted: {reason}")));
+            }
+        }
 
         // Enforce PSS 'restricted' on the managed namespace (idempotent)
         if let Err(e) = pss::ensure_namespace_pss_labels(&client, &namespace).await {
@@ -1374,11 +1433,96 @@ pub(crate) fn apply_stellar_node(
                         super::forensic_snapshot::reconcile_forensic_snapshot(&client, &node).await?;
                     }
                     NodeType::Horizon | NodeType::SorobanRpc => {
-                        resources::ensure_deployment(&client, &node, ctx.enable_mtls,
-                            &propagated_labels,
-                            ctx.dry_run,
-                        )
-                        .await?;
+                        let current_version = get_current_deployment_version(&client, &node).await?;
+                        let blue_green_migration = node.spec.node_type == NodeType::Horizon
+                            && node.spec.strategy.strategy_type
+                                == crate::crd::types::RolloutStrategyType::BlueGreen
+                            && node
+                                .spec
+                                .horizon_config
+                                .as_ref()
+                                .map(|cfg| cfg.auto_migration)
+                                .unwrap_or(false)
+                            && current_version
+                                .as_ref()
+                                .map(|v| v != &node.spec.version)
+                                .unwrap_or(false);
+
+                        if !blue_green_migration {
+                            resources::ensure_deployment(
+                                &client,
+                                &node,
+                                ctx.enable_mtls,
+                                &propagated_labels,
+                                ctx.dry_run,
+                            )
+                            .await?;
+                        } else {
+                            info!(
+                                "Starting blue/green Horizon migration for {}/{}",
+                                namespace, name
+                            );
+
+                            let mut status_patch = serde_json::json!({
+                                "status": {
+                                    "phase": "Migrating",
+                                    "message": format!(
+                                        "Performing blue/green Horizon schema migration to {}",
+                                        node.spec.version
+                                    )
+                                }
+                            });
+                            let api: Api<StellarNode> = Api::namespaced(client.clone(), &namespace);
+                            api.patch_status(
+                                &name,
+                                &PatchParams::apply("stellar-operator"),
+                                &Patch::Merge(&status_patch),
+                            )
+                            .await?;
+
+                            let config = super::blue_green::BlueGreenConfig::default();
+                            let migration_success = super::blue_green::orchestrate_horizon_migration(
+                                &client,
+                                &node,
+                                &config,
+                            )
+                            .await?;
+
+                            if migration_success {
+                                let patch = serde_json::json!({
+                                    "status": {
+                                        "lastMigratedVersion": node.spec.version,
+                                        "phase": "Running",
+                                        "message": format!(
+                                            "Horizon migration to {} completed successfully",
+                                            node.spec.version
+                                        )
+                                    }
+                                });
+                                api.patch_status(
+                                    &name,
+                                    &PatchParams::apply("stellar-operator"),
+                                    &Patch::Merge(&patch),
+                                )
+                                .await?;
+                            } else {
+                                let patch = serde_json::json!({
+                                    "status": {
+                                        "phase": "Failed",
+                                        "message": format!(
+                                            "Blue/green Horizon migration to {} failed",
+                                            node.spec.version
+                                        )
+                                    }
+                                });
+                                api.patch_status(
+                                    &name,
+                                    &PatchParams::apply("stellar-operator"),
+                                    &Patch::Merge(&patch),
+                                )
+                                .await?;
+                            }
+                        }
 
                         // Handle Canary Deployment
                         if let Some(cfg) = node.spec.strategy.canary() {
@@ -2493,6 +2637,10 @@ pub(crate) fn apply_stellar_node(
         // 14. Update status to Running with ready replica count
         // Use configured requeue interval for healthy reconciliation
         let requeue_interval = ctx.operator_config.reconciler.requeue_interval;
+
+        // ── Plugin SDK: post_reconcile hooks ──────────────────────────────────
+        ctx.plugin_registry.run_post_reconcile(&plugin_ctx).await;
+
         Ok(Action::requeue(Duration::from_secs(if phase == "Ready" {
             requeue_interval
         } else {
@@ -2758,11 +2906,11 @@ async fn get_current_deployment_version(
     node: &StellarNode,
 ) -> Result<Option<String>> {
     let namespace = node.namespace().unwrap_or_else(|| "default".to_string());
-    let name = node.name_any();
+    let names = vec![node.name_any(), format!("{}-green", node.name_any())];
 
     let api: Api<Deployment> = Api::namespaced(client.clone(), &namespace);
-    match api.get(&name).await {
-        Ok(deployment) => {
+    for name in names {
+        if let Ok(deployment) = api.get(&name).await {
             let version = deployment
                 .spec
                 .as_ref()
@@ -2771,10 +2919,13 @@ async fn get_current_deployment_version(
                 .and_then(|c| c.image.as_ref())
                 .and_then(|img| img.split(':').next_back())
                 .map(|v| v.to_string());
-            Ok(version)
+            if version.is_some() {
+                return Ok(version);
+            }
         }
-        Err(_) => Ok(None),
     }
+
+    Ok(None)
 }
 
 /// Check health of canary pods

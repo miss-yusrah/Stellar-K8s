@@ -5,6 +5,7 @@ use crate::cli::{Args, Commands};
 use crate::commands::benchmark::run_benchmark_controller_cmd;
 use crate::commands::check_crd::run_check_crd;
 use crate::commands::doctor::run_doctor;
+use crate::commands::export_compliance::run_export_compliance;
 use crate::commands::info::run_info;
 use crate::commands::operator::run_operator;
 use crate::commands::runbook::run_generate_runbook;
@@ -70,7 +71,9 @@ async fn main() -> Result<(), Error> {
                 .unwrap_or_else(|| PathBuf::from("."));
 
             let out_dir = match shell {
-                clap_complete::Shell::Bash => home_dir.join(".local/share/bash-completion/completions"),
+                clap_complete::Shell::Bash => {
+                    home_dir.join(".local/share/bash-completion/completions")
+                }
                 clap_complete::Shell::Zsh => home_dir.join(".zsh/completions"),
                 clap_complete::Shell::Fish => home_dir.join(".config/fish/completions"),
                 _ => std::env::current_dir().unwrap_or_default(),
@@ -83,7 +86,11 @@ async fn main() -> Result<(), Error> {
 
             match generate_to(shell, &mut cmd, &name, &out_dir) {
                 Ok(path) => {
-                    println!("Successfully installed {} completion script at: {}", shell, path.display());
+                    println!(
+                        "Successfully installed {} completion script at: {}",
+                        shell,
+                        path.display()
+                    );
                     if shell == clap_complete::Shell::Zsh {
                         println!("\nNote: Make sure {} is in your $fpath.", out_dir.display());
                         println!("You may need to add this to your ~/.zshrc:");
@@ -118,6 +125,9 @@ async fn main() -> Result<(), Error> {
             return stellar_k8s::benchmark_compare::run_benchmark_compare(compare_args)
                 .await
                 .map_err(|e| Error::ConfigError(e.to_string()));
+        }
+        Commands::ExportCompliance(export_args) => {
+            return run_export_compliance(export_args).await;
         }
     };
 

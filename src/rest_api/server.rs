@@ -154,6 +154,12 @@ pub async fn run_server(
         .route("/api/v1/audit-log/stream", get(audit_handlers::audit_log_stream))
         .route("/api/v1/audit-log/anomalies", get(audit_handlers::list_audit_anomalies))
         // Custom metrics API
+        // Custom metrics API (Kubernetes custom.metrics.k8s.io/v1beta2)
+        // Discovery endpoint — required by the HPA aggregation layer
+        .route(
+            "/apis/custom.metrics.k8s.io/v1beta2",
+            get(custom_metrics::get_metrics_discovery),
+        )
         .route(
             "/apis/custom.metrics.k8s.io/v1beta2/namespaces/:namespace/pods/:name/:metric",
             get(custom_metrics::get_pod_metric),
@@ -163,6 +169,11 @@ pub async fn run_server(
             get(custom_metrics::get_stellar_node_metric),
         )
         .layer(middleware::from_fn_with_state(state.clone(), auth::api_reader))
+        // Horizon-specific convenience endpoint
+        .route(
+            "/apis/custom.metrics.k8s.io/v1beta2/namespaces/:namespace/horizons.stellar.org/:name/:metric",
+            get(custom_metrics::get_horizon_metric),
+        )
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
