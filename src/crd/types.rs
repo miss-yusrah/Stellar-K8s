@@ -1170,6 +1170,7 @@ pub enum RolloutStrategyType {
     #[default]
     RollingUpdate,
     Canary,
+    BlueGreen,
 }
 
 /// Rollout strategy for updates
