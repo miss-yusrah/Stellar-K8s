@@ -1395,11 +1395,96 @@ pub(crate) fn apply_stellar_node(
                         super::forensic_snapshot::reconcile_forensic_snapshot(&client, &node).await?;
                     }
                     NodeType::Horizon | NodeType::SorobanRpc => {
-                        resources::ensure_deployment(&client, &node, ctx.enable_mtls,
-                            &propagated_labels,
-                            ctx.dry_run,
-                        )
-                        .await?;
+                        let current_version = get_current_deployment_version(&client, &node).await?;
+                        let blue_green_migration = node.spec.node_type == NodeType::Horizon
+                            && node.spec.strategy.strategy_type
+                                == crate::crd::types::RolloutStrategyType::BlueGreen
+                            && node
+                                .spec
+                                .horizon_config
+                                .as_ref()
+                                .map(|cfg| cfg.auto_migration)
+                                .unwrap_or(false)
+                            && current_version
+                                .as_ref()
+                                .map(|v| v != &node.spec.version)
+                                .unwrap_or(false);
+
+                        if !blue_green_migration {
+                            resources::ensure_deployment(
+                                &client,
+                                &node,
+                                ctx.enable_mtls,
+                                &propagated_labels,
+                                ctx.dry_run,
+                            )
+                            .await?;
+                        } else {
+                            info!(
+                                "Starting blue/green Horizon migration for {}/{}",
+                                namespace, name
+                            );
+
+                            let mut status_patch = serde_json::json!({
+                                "status": {
+                                    "phase": "Migrating",
+                                    "message": format!(
+                                        "Performing blue/green Horizon schema migration to {}",
+                                        node.spec.version
+                                    )
+                                }
+                            });
+                            let api: Api<StellarNode> = Api::namespaced(client.clone(), &namespace);
+                            api.patch_status(
+                                &name,
+                                &PatchParams::apply("stellar-operator"),
+                                &Patch::Merge(&status_patch),
+                            )
+                            .await?;
+
+                            let config = super::blue_green::BlueGreenConfig::default();
+                            let migration_success = super::blue_green::orchestrate_horizon_migration(
+                                &client,
+                                &node,
+                                &config,
+                            )
+                            .await?;
+
+                            if migration_success {
+                                let patch = serde_json::json!({
+                                    "status": {
+                                        "lastMigratedVersion": node.spec.version,
+                                        "phase": "Running",
+                                        "message": format!(
+                                            "Horizon migration to {} completed successfully",
+                                            node.spec.version
+                                        )
+                                    }
+                                });
+                                api.patch_status(
+                                    &name,
+                                    &PatchParams::apply("stellar-operator"),
+                                    &Patch::Merge(&patch),
+                                )
+                                .await?;
+                            } else {
+                                let patch = serde_json::json!({
+                                    "status": {
+                                        "phase": "Failed",
+                                        "message": format!(
+                                            "Blue/green Horizon migration to {} failed",
+                                            node.spec.version
+                                        )
+                                    }
+                                });
+                                api.patch_status(
+                                    &name,
+                                    &PatchParams::apply("stellar-operator"),
+                                    &Patch::Merge(&patch),
+                                )
+                                .await?;
+                            }
+                        }
 
                         // Handle Canary Deployment
                         if let Some(cfg) = node.spec.strategy.canary() {
@@ -2779,11 +2864,11 @@ async fn get_current_deployment_version(
     node: &StellarNode,
 ) -> Result<Option<String>> {
     let namespace = node.namespace().unwrap_or_else(|| "default".to_string());
-    let name = node.name_any();
+    let names = vec![node.name_any(), format!("{}-green", node.name_any())];
 
     let api: Api<Deployment> = Api::namespaced(client.clone(), &namespace);
-    match api.get(&name).await {
-        Ok(deployment) => {
+    for name in names {
+        if let Ok(deployment) = api.get(&name).await {
             let version = deployment
                 .spec
                 .as_ref()
@@ -2792,10 +2877,13 @@ async fn get_current_deployment_version(
                 .and_then(|c| c.image.as_ref())
                 .and_then(|img| img.split(':').next_back())
                 .map(|v| v.to_string());
-            Ok(version)
+            if version.is_some() {
+                return Ok(version);
+            }
         }
-        Err(_) => Ok(None),
     }
+
+    Ok(None)
 }
 
 /// Check health of canary pods
