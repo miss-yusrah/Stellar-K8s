@@ -310,6 +310,10 @@ pub struct ControllerState {
     pub job_registry: std::sync::Arc<super::background_jobs::JobRegistry>,
     /// In-memory audit log for admin activity.
     pub audit_log: std::sync::Arc<super::audit_log::AuditLog>,
+    /// Unified audit recorder (in-memory log + optional sink).
+    pub audit_recorder: std::sync::Arc<super::audit_recorder::AuditRecorder>,
+    /// ML-based anomaly detector for operator behavior.
+    pub anomaly_detector: std::sync::Arc<super::anomaly_detection::AnomalyDetector>,
     /// Optional OIDC configuration for JWT-based authentication on the REST API.
     /// When `Some`, the OIDC middleware is active; when `None`, the operator falls
     /// back to Kubernetes RBAC token validation.
@@ -377,6 +381,14 @@ impl ControllerState {
 ///         log_level_expires_at: Arc::new(tokio::sync::Mutex::new(None)),
 ///         last_event_received: Arc::new(AtomicU64::new(0)),
 ///         oidc_config: None,
+///         audit_log: Arc::new(super::audit_log::AuditLog::new()),
+///         audit_recorder: Arc::new(super::audit_recorder::AuditRecorder::new(
+///             Arc::new(super::audit_log::AuditLog::new()),
+///             None,
+///         )),
+///         anomaly_detector: Arc::new(super::anomaly_detection::AnomalyDetector::new(
+///             Default::default(),
+///         )),
 ///     });
 ///     run_controller(state).await?;
 ///     Ok(())
@@ -437,13 +449,7 @@ pub async fn run_controller(state: Arc<ControllerState>) -> Result<()> {
 
     // Start Audit Worker if enabled
     if state.operator_config.audit.enabled {
-        let sink: Arc<dyn AuditSink> = if let Some(s3_config) = &state.operator_config.audit.s3 {
-            Arc::new(S3AuditSink::new(s3_config.clone()).await)
-        } else {
-            Arc::new(NoopAuditSink)
-        };
-
-        let audit_worker = AuditWorker::new(client.clone(), sink);
+        let audit_worker = AuditWorker::new(client.clone(), state.audit_recorder.clone());
         tokio::spawn(async move {
             if let Err(e) = audit_worker.run().await {
                 error!("Audit Worker stopped with error: {}", e);

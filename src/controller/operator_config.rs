@@ -53,6 +53,9 @@ pub struct OperatorConfig {
     /// Audit logging configuration
     #[serde(default)]
     pub audit: AuditConfig,
+    /// ML-based anomaly detection configuration
+    #[serde(default)]
+    pub anomaly_detection: crate::controller::anomaly_detection::AnomalyDetectionConfig,
     /// Disk scaling configuration
     #[serde(default)]
     pub disk_scaling: DiskScalingConfig,

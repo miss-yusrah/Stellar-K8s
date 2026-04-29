@@ -46,6 +46,14 @@ async fn main() -> Result<()> {
         monitor_ebpf_metrics(events_clone, pod_name_clone, namespace_clone).await;
     });
 
+    // Start ML anomaly detection task
+    let events_ml = events.clone();
+    let pod_name_ml = pod_name.clone();
+    let namespace_ml = namespace.clone();
+    tokio::spawn(async move {
+        run_ml_anomaly_detector(events_ml, pod_name_ml, namespace_ml).await;
+    });
+
     loop {
         info!("Watching logs for container: {}", container_name);
 
@@ -304,4 +312,19 @@ async fn report_performance_degradation(
     };
     events.create(&PostParams::default(), &event).await?;
     Ok(())
+}
+
+async fn run_ml_anomaly_detector(events: Api<Event>, pod_name: String, namespace: String) {
+    info!("Starting ML anomaly detection sidecar task");
+    // In a real implementation, this would:
+    // 1. Fetch recent audit logs from the operator API
+    // 2. Fetch Prometheus metrics
+    // 3. Run the ML model (TensorFlow/PyTorch/Tract)
+    // 4. Report anomalies via Events
+    
+    loop {
+        // Simulated ML check
+        sleep(Duration::from_secs(60)).await;
+        debug!("ML anomaly check heartbeat");
+    }
 }

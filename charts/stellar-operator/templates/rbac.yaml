@@ -86,6 +86,14 @@ rules:
     resources: ["events"]
     verbs: ["create", "patch"]
 
+  # API authentication/authorization reviews (for REST API RBAC)
+  - apiGroups: ["authentication.k8s.io"]
+    resources: ["tokenreviews"]
+    verbs: ["create"]
+  - apiGroups: ["authorization.k8s.io"]
+    resources: ["subjectaccessreviews"]
+    verbs: ["create"]
+
   # Coordination for leader election
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]

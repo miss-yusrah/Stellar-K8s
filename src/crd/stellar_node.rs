@@ -14,10 +14,11 @@ use super::types::{
     DisasterRecoveryConfig, DisasterRecoveryStatus, ExternalDatabaseConfig, ForensicSnapshotConfig,
     GasAutoscalingConfig, GlobalDiscoveryConfig, HistoryMode, HorizonConfig, IngressConfig,
     LabelPropagationConfig, LoadBalancerConfig, LogShipperConfig, ManagedDatabaseConfig,
-    NetworkPolicyConfig, NodeType, OciSnapshotConfig, PlacementConfig, PodAntiAffinityStrength,
-    ProbeConfig, ResourceRequirements, RestoreFromSnapshotConfig, RetentionPolicy, RolloutStrategy,
-    SnapshotScheduleConfig, SorobanConfig, StellarNetwork, StorageConfig, SyncStateScalingConfig,
-    ValidatorConfig, VpaConfig,
+    NetworkPolicyConfig, NodeType, OciSnapshotConfig, OperatorRole, PlacementConfig,
+    PodAntiAffinityStrength, PolicyConfig, ProbeConfig, RbacConfig, ResourceRequirements,
+    RestoreFromSnapshotConfig, RetentionPolicy, RolloutStrategy, SnapshotScheduleConfig,
+    SorobanConfig, StellarNetwork, StorageConfig, SyncStateScalingConfig, ValidatorConfig,
+    VpaConfig, AuditConfig,
 };
 
 /// Structured validation error for `StellarNodeSpec`
@@ -348,6 +349,18 @@ pub struct StellarNodeSpec {
     /// Only applicable to `Validator` nodes with history archives enabled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pruning_policy: Option<super::types::PruningPolicy>,
+
+    /// RBAC configuration for operator-level permissions.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rbac: Option<RbacConfig>,
+
+    /// Audit logging configuration for operator actions.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audit: Option<AuditConfig>,
+
+    /// Policy-based authorization configuration (OPA).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub policy: Option<PolicyConfig>,
 }
 
 fn default_replicas() -> i32 {
@@ -412,6 +425,9 @@ impl Default for StellarNodeSpec {
             log_shipper: None,
             sync_state_scaling: None,
             pruning_policy: None,
+            rbac: None,
+            audit: None,
+            policy: None,
         }
     }
 }
@@ -1054,6 +1070,16 @@ fn validate_cross_cluster(cc: &CrossClusterConfig, errors: &mut Vec<SpecValidati
                     ),
                     "crossCluster.peerClusters[].latencyThresholdMs must be greater than 0",
                     "Set spec.crossCluster.peerClusters[].latencyThresholdMs to a value greater than 0.",
+                ));
+            }
+        }
+
+        if let Some(fed) = &cc.federation {
+            if fed.enabled && peer.kubeconfig_secret_ref.as_deref().unwrap_or("").is_empty() {
+                errors.push(SpecValidationError::new(
+                    format!("spec.crossCluster.peerClusters[{i}].kubeconfigSecretRef"),
+                    "crossCluster.peerClusters[].kubeconfigSecretRef is required for federation",
+                    "Set spec.crossCluster.peerClusters[].kubeconfigSecretRef when crossCluster.federation.enabled is true.",
                 ));
             }
         }

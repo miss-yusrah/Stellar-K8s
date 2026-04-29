@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State},
+    extract::{Extension, Path, State},
     http::StatusCode,
     Json,
 };
@@ -11,8 +11,9 @@ use k8s_openapi::api::core::v1::Pod;
 use kube::{api::Api, api::LogParams, api::Patch, api::PatchParams, ResourceExt};
 use tracing::{error, info, instrument};
 
-use crate::controller::ControllerState;
+use crate::controller::{AdminAction, AuditEntry, ControllerState};
 use crate::crd::{NodeType, StellarNetwork, StellarNode};
+use crate::rest_api::auth::RequestIdentity;
 
 use super::dashboard_dto::{
     ConditionDisplay, DashboardOverview, MetricsSummary, NetworkBreakdown, NodeAction,
@@ -228,6 +229,7 @@ pub async fn get_node_logs(
 pub async fn execute_node_action(
     State(state): State<Arc<ControllerState>>,
     Path((namespace, name)): Path<(String, String)>,
+    Extension(identity): Extension<RequestIdentity>,
     Json(request): Json<NodeActionRequest>,
 ) -> Result<Json<NodeActionResponse>, (StatusCode, Json<ErrorResponse>)> {
     let api: Api<StellarNode> = Api::namespaced(state.client.clone(), &namespace);
@@ -267,11 +269,39 @@ pub async fn execute_node_action(
     };
 
     match result {
-        Ok(message) => Ok(Json(NodeActionResponse {
-            success: true,
-            message,
-            action: request.action,
-        })),
+        Ok(message) => {
+            let action = match request.action {
+                NodeAction::Restart => AdminAction::Other("node_restart".to_string()),
+                NodeAction::Snapshot => AdminAction::ForensicSnapshot,
+                NodeAction::Suspend => AdminAction::NodeSuspend,
+                NodeAction::Resume => AdminAction::NodeResume,
+                NodeAction::MaintenanceMode => AdminAction::TriggerMaintenance,
+                NodeAction::Prune => AdminAction::Other("prune".to_string()),
+            };
+
+            state
+                .audit_recorder
+                .record(
+                    AuditEntry::new(
+                        action,
+                        identity.subject.clone(),
+                        &name,
+                        namespace.clone(),
+                        Some(&format!("Action {:?}", request.action)),
+                    )
+                    .with_metadata(serde_json::json!({
+                        "authType": identity.auth_type,
+                        "groups": identity.groups,
+                    })),
+                )
+                .await;
+
+            Ok(Json(NodeActionResponse {
+                success: true,
+                message,
+                action: request.action,
+            }))
+        }
         Err(e) => {
             error!("Action failed: {:?}", e);
             Err((
